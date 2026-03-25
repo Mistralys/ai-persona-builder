@@ -1,0 +1,8 @@
+slug: example-persona
+name: Example Persona
+description: A minimal example persona for integration testing.
+vs_file_name: example-persona.agent.md
+cc_file_name: example-persona.md
+tools:
+  - read
+  - write
