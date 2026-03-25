@@ -1,6 +1,6 @@
-# AI Agents Operating System — @smor/persona-build
+# AI Agents Operating System — @mistralys/persona-builder
 
-> **Purpose:** Authoritative entry point for AI agents entering the `@smor/persona-build` codebase. Defines how agents discover, navigate, and interact with the library to ensure architectural integrity and token efficiency.
+> **Purpose:** Authoritative entry point for AI agents entering the `@mistralys/persona-builder` codebase. Defines how agents discover, navigate, and interact with the library to ensure architectural integrity and token efficiency.
 
 ---
 
@@ -122,7 +122,7 @@ Unclear → Pause and request user clarification
 
 | Property | Value |
 |----------|-------|
-| **Package** | `@smor/persona-build` |
+| **Package** | `@mistralys/persona-builder` |
 | **Version** | 0.2.0 |
 | **Language** | TypeScript 5.8.2 (ES2022) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |

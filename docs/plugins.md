@@ -50,7 +50,7 @@ interface PersonaBuildPlugin {
 ### Adding a custom frontmatter field
 
 ```ts
-import { build, type PersonaBuildPlugin } from '@smor/persona-build';
+import { build, type PersonaBuildPlugin } from '@mistralys/persona-builder';
 
 const timestampPlugin: PersonaBuildPlugin = {
   name: 'timestamp',
@@ -96,7 +96,7 @@ mcpServers:
 ### Validation plugin
 
 ```ts
-import type { PersonaBuildPlugin, ValidationResult } from '@smor/persona-build';
+import type { PersonaBuildPlugin, ValidationResult } from '@mistralys/persona-builder';
 
 const requiredFieldsPlugin: PersonaBuildPlugin = {
   name: 'required-fields',

@@ -1,6 +1,6 @@
 # Public API
 
-All public symbols are exported from `@smor/persona-build`:
+All public symbols are exported from `@mistralys/persona-builder`:
 
 | Export | Kind | Description |
 |--------|------|-------------|
@@ -15,9 +15,9 @@ All public symbols are exported from `@smor/persona-build`:
 | `VERSION` | `string` | Package version string (e.g. `'0.2.0'`), sourced from `package.json` at runtime. |
 
 ```ts
-import { build, VERSION } from '@smor/persona-build';
+import { build, VERSION } from '@mistralys/persona-builder';
 
-console.log(`Using @smor/persona-build v${VERSION}`);
+console.log(`Using @mistralys/persona-builder v${VERSION}`);
 ```
 
 For detailed type definitions, see:

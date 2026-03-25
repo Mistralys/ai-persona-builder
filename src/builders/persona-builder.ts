@@ -1,7 +1,7 @@
 /**
  * src/builders/persona-builder.ts
  *
- * Core build orchestrator for @smor/persona-build.
+ * Core build orchestrator for @mistralys/persona-builder.
  *
  * Exports three public functions:
  *

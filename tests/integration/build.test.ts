@@ -1,7 +1,7 @@
 /**
  * tests/integration/build.test.ts
  *
- * End-to-end integration test for @smor/persona-build.
+ * End-to-end integration test for @mistralys/persona-builder.
  *
  * Calls build(config) against the project-level fixtures/ directory and
  * asserts that:

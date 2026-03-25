@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * src/cli.ts — @smor/persona-build CLI entry point
+ * src/cli.ts — @mistralys/persona-builder CLI entry point
  *
  * Flags:
  *   --config <path>  Path to config file (JS/CJS/JSON). Default: persona-build.config.js
@@ -37,7 +37,7 @@ const VERSION = (_pkgRequire('../package.json') as { version: string }).version;
 // ---------------------------------------------------------------------------
 
 const USAGE = `
-@smor/persona-build v${VERSION}
+@mistralys/persona-builder v${VERSION}
 
 Build AI persona documents from YAML metadata and Markdown content templates.
 

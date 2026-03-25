@@ -21,13 +21,13 @@ Define your personas once as simple YAML + Markdown sources, and the library gen
 ## 🚀 Quick Start
 
 ```bash
-npm install @smor/persona-build
+npm install @mistralys/persona-builder
 ```
 
 ### Programmatic API
 
 ```ts
-import { build } from '@smor/persona-build';
+import { build } from '@mistralys/persona-builder';
 import path from 'node:path';
 
 const summary = await build({

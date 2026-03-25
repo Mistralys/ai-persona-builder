@@ -1,7 +1,7 @@
 # File Tree
 
 ```
-@smor/persona-build/
+@mistralys/persona-builder/
 ├── package.json                    # npm package config (dual CJS + ESM exports, bin entry)
 ├── tsconfig.json                   # TypeScript config (strict, ES2022, bundler resolution)
 ├── tsup.config.ts                  # Build config (dual format, two entry points)

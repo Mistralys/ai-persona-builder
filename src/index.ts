@@ -1,5 +1,5 @@
 /**
- * @smor/persona-build
+ * @mistralys/persona-builder
  *
  * Public API barrel export.
  * Feature modules will be exported from here as they are implemented in subsequent WPs.

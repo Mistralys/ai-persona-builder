@@ -1,16 +1,16 @@
-# Project Manifest — @smor/persona-build
+# Project Manifest — @mistralys/persona-builder
 
-> **Purpose:** Canonical reference for AI agents working with the `@smor/persona-build` library. Start here, then follow the links to detailed sections.
+> **Purpose:** Canonical reference for AI agents working with the `@mistralys/persona-builder` library. Start here, then follow the links to detailed sections.
 
 ---
 
 ## Project Overview
 
-`@smor/persona-build` is a standalone TypeScript library that builds AI persona documents from YAML metadata and Markdown content templates. It targets two output formats — VS Code Chat instruction files (`.agent.md`) and Claude Code instruction files (`.md`) — using a plugin-extensible pipeline.
+`@mistralys/persona-builder` is a standalone TypeScript library that builds AI persona documents from YAML metadata and Markdown content templates. It targets two output formats — VS Code Chat instruction files (`.agent.md`) and Claude Code instruction files (`.md`) — using a plugin-extensible pipeline.
 
 | Property | Value |
 |----------|-------|
-| **Package** | `@smor/persona-build` |
+| **Package** | `@mistralys/persona-builder` |
 | **Version** | 0.2.0 |
 | **Language** | TypeScript 5.8 (ES2022 target) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |

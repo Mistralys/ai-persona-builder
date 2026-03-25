@@ -1,7 +1,7 @@
 /**
  * src/plugins/types.ts
  *
- * Core plugin system types for @smor/persona-build.
+ * Core plugin system types for @mistralys/persona-builder.
  *
  * Defines:
  *   - TargetType         — union of supported output targets

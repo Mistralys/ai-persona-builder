@@ -1,6 +1,6 @@
 # Public API Surface
 
-All public symbols are exported from the package entry point `@smor/persona-build` (via `src/index.ts`).
+All public symbols are exported from the package entry point `@mistralys/persona-builder` (via `src/index.ts`).
 
 ---
 

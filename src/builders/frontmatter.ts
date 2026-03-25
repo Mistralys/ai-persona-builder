@@ -1,7 +1,7 @@
 /**
  * src/builders/frontmatter.ts
  *
- * Frontmatter template registry for @smor/persona-build.
+ * Frontmatter template registry for @mistralys/persona-builder.
  *
  * Ships two minimal default templates — one per target — that work for the
  * "standalone" persona mode (simple personas without numbered workflows or
