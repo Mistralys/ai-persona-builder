@@ -402,3 +402,100 @@ export interface ValidationResult {
   message: string;
 }
 ```
+
+---
+
+## Ledger Plugin — `@mistralys/persona-builder/plugins/ledger`
+
+Sub-path export. Not included in the main `@mistralys/persona-builder` barrel.
+
+### `ledgerPlugin(options?)`
+
+```ts
+export function ledgerPlugin(options?: LedgerPluginOptions): PersonaBuildPlugin;
+```
+
+Factory function that returns a `PersonaBuildPlugin` for the ledger persona suite. The plugin wires `renderRoster`, `renderMcpToolsTable`, `validateRole`, and `validateNoteOnlyGuard` into the standard build hooks. Also registers `FRONTMATTER_LEDGER_VSCODE` and `FRONTMATTER_LEDGER_CC` as target-specific frontmatter templates.
+
+### `LedgerPluginOptions`
+
+```ts
+export interface LedgerPluginOptions {
+  manifestRoles?: ReadonlyArray<string>;
+  warnOnUnknownRole?: boolean;  // default: true
+}
+```
+
+### `renderRoster(roster, activeNumber)`
+
+```ts
+export function renderRoster(roster: RosterEntry[], activeNumber: number): string;
+```
+
+Renders the agent roster as a numbered Markdown list. Appends `(YOU)` to the entry matching `activeNumber`.
+
+### `RosterEntry`
+
+```ts
+export interface RosterEntry {
+  number: number;
+  title: string;
+  short: string;
+}
+```
+
+### `renderMcpToolsTable(tools)`
+
+```ts
+export function renderMcpToolsTable(tools: McpToolEntry[]): string;
+```
+
+Renders the MCP tools array as Markdown table rows. Entries with `note_only: true` are filtered out.
+
+### `McpToolEntry`
+
+```ts
+export interface McpToolEntry {
+  tool: string;
+  purpose: string;
+  note_only?: boolean;
+}
+```
+
+### `validateRole(role, manifestRoles)`
+
+```ts
+export function validateRole(
+  role: string | undefined,
+  manifestRoles: ReadonlyArray<string> | ReadonlySet<string>,
+): ValidationResult[];
+```
+
+Validates a persona's `role` field against the workflow manifest. Returns an empty array when the role is valid or absent; a single warning when the role is not found.
+
+### `validateNoteOnlyGuard(output, mcpTools)`
+
+```ts
+export function validateNoteOnlyGuard(
+  output: string,
+  mcpTools: ReadonlyArray<McpToolEntry> | undefined,
+): ValidationResult[];
+```
+
+Asserts that `note_only: true` MCP tools do not appear in the rendered persona output. Returns one error per leaking tool name.
+
+### `FRONTMATTER_LEDGER_VSCODE`
+
+```ts
+export const FRONTMATTER_LEDGER_VSCODE: string;
+```
+
+VS Code frontmatter template for the ledger persona suite.
+
+### `FRONTMATTER_LEDGER_CC`
+
+```ts
+export const FRONTMATTER_LEDGER_CC: string;
+```
+
+Claude Code frontmatter template for the ledger persona suite (includes conditional `mcpServers` block).

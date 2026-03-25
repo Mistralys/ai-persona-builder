@@ -64,7 +64,7 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, and built-in context variables |
 | [Configuration Reference](docs/configuration.md) | `BuildConfig`, `SuiteConfig`, and `BuildSummary` fields |
 | [CLI Reference](docs/cli.md) | Command-line flags, config file format, and common patterns |
-| [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface and examples |
+| [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface, examples, and the built-in Ledger Plugin |
 | [Public API](docs/api.md) | All exported types and functions |
 
 ## 📄 License

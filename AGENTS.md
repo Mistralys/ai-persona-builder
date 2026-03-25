@@ -123,7 +123,7 @@ Unclear → Pause and request user clarification
 | Property | Value |
 |----------|-------|
 | **Package** | `@mistralys/persona-builder` |
-| **Version** | 0.2.0 |
+| **Version** | 1.0.0 |
 | **Language** | TypeScript 5.8.2 (ES2022) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |
 | **Architecture** | Layered: builders → plugins → engine / loaders / validators |

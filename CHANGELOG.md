@@ -5,6 +5,27 @@ All notable changes to `@mistralys/persona-builder` will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.0] - 2026-03-25
+
+First stable public release. The plugin architecture is complete and the built-in ledger plugin is fully implemented, tested, and publicly exported.
+
+### Added
+
+- **Ledger plugin — core helpers** (`src/plugins/ledger/`) — four internal TypeScript modules forming the foundation of the built-in ledger plugin:
+  - `roster-renderer.ts` — `renderRoster(roster: RosterEntry[], activeNumber: number): string` — renders the agent roster as a numbered Markdown list with `(YOU)` suffix on the active entry. Ported from `scripts/lib/persona-helpers.js`.
+  - `mcp-tools-renderer.ts` — `renderMcpToolsTable(tools: McpToolEntry[]): string` — renders MCP tools as Markdown table rows, filtering out `note_only: true` entries. Ported from `scripts/lib/persona-helpers.js`.
+  - `role-validator.ts` — `validateRole(role, manifestRoles)` and `validateNoteOnlyGuard(output, mcpTools)` — pure validation helpers compatible with the `onValidate` plugin hook. `validateRole` warns when a persona role is absent from the workflow manifest; `validateNoteOnlyGuard` errors when a `note_only` tool leaks into rendered output (second-line defence after the renderer filter).
+  - `frontmatter-templates.ts` — `FRONTMATTER_LEDGER_VSCODE` and `FRONTMATTER_LEDGER_CC` string constants — ledger-suite frontmatter templates for VS Code and Claude Code targets respectively. Structurally identical to the originals in `build-personas.js`; `ccFrontmatterFields()` is inlined as a named constant.
+  - All four modules are pure functions with no file-system I/O, no side effects, and no global state. All exports carry explicit TypeScript types; no use of `any`.
+- **Ledger plugin — factory & public export** (`src/plugins/ledger/index.ts`):
+  - `ledgerPlugin(options?: LedgerPluginOptions): PersonaBuildPlugin` — factory function that composes the core helpers into a fully wired `PersonaBuildPlugin` instance.
+  - `LedgerPluginOptions` interface — `manifestRoles?: ReadonlyArray<string>` (scopes role validation to a known set) and `warnOnUnknownRole?: boolean` (default: `true`).
+  - Sub-path export `@mistralys/persona-builder/plugins/ledger` registered in the `exports` field of `package.json`; compiled artefacts `dist/plugins/ledger/index.{js,cjs,d.ts,d.cts}` present in dist.
+- **Ledger plugin — unit tests** (`tests/plugins/ledger.test.ts`) — comprehensive test suite covering the roster renderer, MCP tools renderer, role validator, `note_only` guard, plugin hook composition, and `LedgerPluginOptions` defaults. Brings the total test count to 227 tests across 14 test files.
+- **Ledger plugin documentation** (`docs/plugins.md`) — full Ledger Plugin section covering installation, configuration, `LedgerPluginOptions` reference, and usage examples.
+
 ## [0.2.0] - 2026-03-25
 
 ### Added
@@ -61,3 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full test skeleton: `tests/engine/`, `tests/builders/`, `tests/loaders/`, `tests/plugins/`, `tests/validators/` with `.gitkeep` trackers
 - Fixture suite under `fixtures/`: `shared/partials/greeting.md`, `sample-suite/meta/_shared.yaml`, `sample-suite/meta/example-persona.yaml`, `sample-suite/content/example-persona.md`, `sample-suite/partials/suite-specific.md`
 - `.gitignore` entry for `dist/` (in addition to the existing `node_modules/` entry)
+
+[Unreleased]: https://github.com/Mistralys/ai-persona-builder/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Mistralys/ai-persona-builder/compare/v0.2.0...v1.0.0
+[0.2.0]: https://github.com/Mistralys/ai-persona-builder/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/Mistralys/ai-persona-builder/releases/tag/v0.1.0

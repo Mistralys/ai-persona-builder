@@ -1,6 +1,6 @@
 {
   "name": "@mistralys/persona-builder",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Standalone library for building AI persona documents from YAML metadata and Markdown content templates.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./plugins/ledger": {
+      "types": "./dist/plugins/ledger/index.d.ts",
+      "import": "./dist/plugins/ledger/index.js",
+      "require": "./dist/plugins/ledger/index.cjs"
     }
   },
   "bin": {
@@ -30,11 +35,12 @@
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.13.14",
+    "@vitest/coverage-v8": "^3.2.4",
     "tsup": "^8.4.0",
     "typescript": "^5.8.2",
-    "vitest": "^3.0.9",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.13.14"
+    "vitest": "^3.0.9"
   },
   "engines": {
     "node": ">=18.0.0"

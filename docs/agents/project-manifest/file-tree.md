@@ -4,7 +4,7 @@
 @mistralys/persona-builder/
 ├── package.json                    # npm package config (dual CJS + ESM exports, bin entry)
 ├── tsconfig.json                   # TypeScript config (strict, ES2022, bundler resolution)
-├── tsup.config.ts                  # Build config (dual format, two entry points)
+├── tsup.config.ts                  # Build config (dual format, three entry points: index, cli, plugins/ledger/index)
 ├── vitest.config.ts                # Test runner config
 ├── CHANGELOG.md                    # Version history
 ├── README.md                       # User-facing documentation
@@ -31,7 +31,13 @@
 │   ├── plugins/                    # Plugin system
 │   │   ├── index.ts                # Barrel re-export (types + runner functions)
 │   │   ├── types.ts                # Core types: TargetType, PersonaMetadata, SuiteConfig, etc.
-│   │   └── runner.ts               # Hook invocation: runSuiteInit, runBuildContext, etc.
+│   │   ├── runner.ts               # Hook invocation: runSuiteInit, runBuildContext, etc.
+│   │   └── ledger/                 # Ledger plugin (sub-path: @mistralys/persona-builder/plugins/ledger)
+│   │       ├── index.ts            # ledgerPlugin(options) factory — LedgerPluginOptions type
+│   │       ├── roster-renderer.ts  # renderRoster() — numbered Markdown list with (YOU) marker
+│   │       ├── mcp-tools-renderer.ts # renderMcpToolsTable() — filters note_only entries
+│   │       ├── role-validator.ts   # validateRole() + validateNoteOnlyGuard()
+│   │       └── frontmatter-templates.ts # FRONTMATTER_LEDGER_VSCODE, FRONTMATTER_LEDGER_CC
 │   │
 │   ├── builders/                   # Build orchestration
 │   │   ├── index.ts                # Barrel re-export

@@ -11,7 +11,7 @@
 | Property | Value |
 |----------|-------|
 | **Package** | `@mistralys/persona-builder` |
-| **Version** | 0.2.0 |
+| **Version** | 1.0.0 |
 | **Language** | TypeScript 5.8 (ES2022 target) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |
 | **Build Tool** | tsup (dual CJS + ESM output) |
