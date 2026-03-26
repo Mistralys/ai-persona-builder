@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-26
+
+### Breaking Changes
+
+- Removed the `./plugins/ledger` sub-path export. The ledger plugin has been migrated to the
+  ai-insights-dev workspace as a local CommonJS module at `personas/plugins/ledger/`. No
+  external consumers are affected (the library has no published consumers).
+
+### Removed
+
+- Deleted `src/plugins/ledger/` and all 5 source files (`index.ts`, `roster-renderer.ts`,
+  `mcp-tools-renderer.ts`, `role-validator.ts`, `frontmatter-templates.ts`).
+- Deleted `tests/plugins/ledger.test.ts`; test suite now at 228 tests across 14 files.
+- Removed `"./plugins/ledger"` entry from the `exports` map in `package.json`.
+- Removed `'src/plugins/ledger/index.ts'` entry from `tsup.config.ts`.
+
+## [1.0.1] - 2026-03-26
+
+Patch release addressing known tech-debt items, documentation fixes, and two consumer-side bug fixes identified in the post-integration synthesis.
+
+### Changed (library)
+
+- **Fix `warnOnUnknownRole` documentation** — Removed the stale "not yet wired" known-limitation blockquote from `docs/plugins.md` and replaced it with accurate documentation of the `warnOnUnknownRole` escalation contract (`true` → `warning`, `false` → `error`). Added a "Validator Severity Escalation Pattern" subsection for future plugin authors. Updated the corresponding JSDoc in `src/plugins/ledger/index.ts` and the `api-surface.md` manifest.
+- **Resolve `TargetType` dual re-export** — Eliminated the duplicate `TargetType` re-export from `src/builders/types.ts` and `src/builders/index.ts`, resolving a tech-debt item flagged in `constraints.md` before 1.0. `TargetType` is now exported exclusively via `src/plugins/types.ts` → `src/plugins/index.ts` → `src/index.ts`.
+- **Extract `escapeRegExp` to shared utility** — Moved the previously private `escapeRegExp` function from `src/plugins/ledger/role-validator.ts` into a new shared module at `src/utils/regex.ts` with a barrel at `src/utils/index.ts`. The function is now a named export of the library's main barrel, available to all future validators and plugins without duplication.
+- **Improve `renderedOutputCache` keying** — Extended the `onValidate` hook signature with an optional `target?: TargetType` parameter and propagated it through the plugin runner (`src/plugins/runner.ts`) and persona builder (`src/builders/persona-builder.ts`). The ledger plugin now uses a composite cache key `${persona.name}:${target}` (with `'unknown'` fallback) so that multi-target builds cache and validate output correctly per target.
+
+### Fixed (consumer — `ai-insights-dev`)
+
+- **`scripts/build-personas.js` version log bug** — Captured `oldVersion` before mutating `pkg.version`, so the console message now correctly shows `oldVersion → newVersion` instead of the old `newVersion → newVersion`.
+- **`scripts/build-personas.js` catch block exit code** — The catch block now propagates the library's own exit code via `err.status ?? 1` instead of always exiting with `1`.
+
+### Removed (consumer — `ai-insights-dev`)
+
+- Deleted the orphaned empty directories `scripts/lib/` and `scripts/tests/`.
+
 ## [1.0.0] - 2026-03-25
 
 First stable public release. The plugin architecture is complete and the built-in ledger plugin is fully implemented, tested, and publicly exported.
@@ -83,7 +119,8 @@ First stable public release. The plugin architecture is complete and the built-i
 - Fixture suite under `fixtures/`: `shared/partials/greeting.md`, `sample-suite/meta/_shared.yaml`, `sample-suite/meta/example-persona.yaml`, `sample-suite/content/example-persona.md`, `sample-suite/partials/suite-specific.md`
 - `.gitignore` entry for `dist/` (in addition to the existing `node_modules/` entry)
 
-[Unreleased]: https://github.com/Mistralys/ai-persona-builder/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Mistralys/ai-persona-builder/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Mistralys/ai-persona-builder/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Mistralys/ai-persona-builder/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/Mistralys/ai-persona-builder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Mistralys/ai-persona-builder/releases/tag/v0.1.0

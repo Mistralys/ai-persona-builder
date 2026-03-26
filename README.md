@@ -67,6 +67,62 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface, examples, and the built-in Ledger Plugin |
 | [Public API](docs/api.md) | All exported types and functions |
 
+## 🔌 Ledger Plugin
+
+The ledger plugin is a first-party plugin shipped as a sub-path export. It adds ledger-specific rendering (roster table, MCP tools table) and role validation into the standard build hooks.
+
+### Installation
+
+The plugin ships with the library — no extra install needed.
+
+```bash
+npm install @mistralys/persona-builder
+```
+
+### Usage
+
+```js
+// personas/persona-build.config.js
+const { ledgerPlugin } = require('@mistralys/persona-builder/plugins/ledger');
+const manifest = require('../shared/workflow-manifest.json');
+
+module.exports = {
+  rootDir: __dirname,
+  sharedPartialsDir: './shared/partials',
+  suites: {
+    ledger: {
+      srcDir: './ledger/src',
+      outVscode: './ledger/vs-code',
+      outClaudeCode: './ledger/claude-code',
+      personaMode: 'numbered',
+    },
+    standalone: {
+      srcDir: './standalone/src',
+      outVscode: './standalone/vs-code',
+      outClaudeCode: './standalone/claude-code',
+      personaMode: 'standalone',
+    },
+  },
+  plugins: [
+    ledgerPlugin({
+      manifestRoles: manifest.roles.map(r => r.name),
+      warnOnUnknownRole: true,
+    }),
+  ],
+};
+```
+
+### Options — `LedgerPluginOptions`
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `manifestRoles` | `ReadonlyArray<string>` | `[]` | Canonical role names from your workflow manifest. Each persona's `role` field is validated against this list. When omitted or empty, role validation is skipped. |
+| `warnOnUnknownRole` | `boolean` | `true` | When `true`, an unknown `role` field emits a warning-level validation result. |
+
+See the [Plugins reference](docs/plugins.md#ledger-plugin----mistralys-persona-builderpluginsledger) for full hook documentation and exported types (`RosterEntry`, `McpToolEntry`).
+
+---
+
 ## 📄 License
 
 MIT

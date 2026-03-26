@@ -4,7 +4,7 @@
 @mistralys/persona-builder/
 ├── package.json                    # npm package config (dual CJS + ESM exports, bin entry)
 ├── tsconfig.json                   # TypeScript config (strict, ES2022, bundler resolution)
-├── tsup.config.ts                  # Build config (dual format, three entry points: index, cli, plugins/ledger/index)
+├── tsup.config.ts                  # Build config (dual format, two entry points: index, cli)
 ├── vitest.config.ts                # Test runner config
 ├── CHANGELOG.md                    # Version history
 ├── README.md                       # User-facing documentation
@@ -31,13 +31,7 @@
 │   ├── plugins/                    # Plugin system
 │   │   ├── index.ts                # Barrel re-export (types + runner functions)
 │   │   ├── types.ts                # Core types: TargetType, PersonaMetadata, SuiteConfig, etc.
-│   │   ├── runner.ts               # Hook invocation: runSuiteInit, runBuildContext, etc.
-│   │   └── ledger/                 # Ledger plugin (sub-path: @mistralys/persona-builder/plugins/ledger)
-│   │       ├── index.ts            # ledgerPlugin(options) factory — LedgerPluginOptions type
-│   │       ├── roster-renderer.ts  # renderRoster() — numbered Markdown list with (YOU) marker
-│   │       ├── mcp-tools-renderer.ts # renderMcpToolsTable() — filters note_only entries
-│   │       ├── role-validator.ts   # validateRole() + validateNoteOnlyGuard()
-│   │       └── frontmatter-templates.ts # FRONTMATTER_LEDGER_VSCODE, FRONTMATTER_LEDGER_CC
+│   │   └── runner.ts               # Hook invocation: runSuiteInit, runBuildContext, etc.
 │   │
 │   ├── builders/                   # Build orchestration
 │   │   ├── index.ts                # Barrel re-export
@@ -45,10 +39,14 @@
 │   │   ├── frontmatter.ts          # Default frontmatter templates + resolution + rendering
 │   │   └── persona-builder.ts      # build(), buildSuite(), buildPersona() orchestrators
 │   │
-│   └── validators/                 # Validation functions
+│   ├── validators/                 # Validation functions
+│   │   ├── index.ts                # Barrel re-export
+│   │   ├── filename-validator.ts   # Kebab-case filename validation
+│   │   └── strict-validator.ts     # Required-marker presence validation
+│   │
+│   └── utils/                      # Shared utility functions
 │       ├── index.ts                # Barrel re-export
-│       ├── filename-validator.ts   # Kebab-case filename validation
-│       └── strict-validator.ts     # Required-marker presence validation
+│       └── regex.ts                # escapeRegExp() — safe RegExp string escaping
 │
 ├── tests/
 │   ├── README.md                   # Test suite documentation

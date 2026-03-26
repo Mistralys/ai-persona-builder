@@ -42,6 +42,8 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 - Each layer directory contains an `index.ts` barrel that re-exports all public symbols.
 - The top-level `src/index.ts` re-exports from all layer barrels (`export *`).
 - Type-only exports use `export type { … }` syntax.
+- **Named re-export for utility barrels:** `src/utils/index.ts` uses explicit named re-exports (`export { escapeRegExp } from './regex.js'`) rather than `export *`. This prevents accidental public-surface leakage if internal helpers are later added to utility files. All future utility barrels must follow this pattern.
+- **Utility module structure:** The `src/utils/` directory follows a one-file-per-domain pattern (e.g. `regex.ts` for regex utilities). Each file contains focused, pure functions. New utilities should create a new domain file rather than appending to an existing one, and the barrel (`index.ts`) must be updated with an explicit named re-export.
 
 ### YAML Metadata
 
@@ -73,15 +75,11 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 
 The default Claude Code frontmatter template references these three context variables, but they are not computed by `buildContext()`. They must come from `_shared.yaml` or a plugin's `onBuildContext` hook. Missing values produce `[WARN] Unresolved variable` in stderr but do not fail the build unless `strict: true`.
 
-### 3. `TargetType` Duplicate Re-Export Path
-
-`TargetType` is re-exported from both `src/plugins/index.ts` and `src/builders/index.ts`, both flowing into `src/index.ts` via `export *`. TypeScript silently deduplicates type-only re-exports today, but a future value export collision would produce a hard error. Canonical home is `src/plugins/types.ts`; remove the re-export from `src/builders/index.ts` before 1.0.
-
-### 4. Node.js Version Floor
+### 3. Node.js Version Floor
 
 `readdir` with `{ recursive: true }` (used in `discoverPersonaYamls`) requires Node ≥ 18.17. The `package.json` currently states `>=18.0.0`, which creates a confusing `TypeError` window for consumers on Node 18.0–18.16. Bump `engines.node` to `>=18.17.0` before 1.0.
 
-### 5. Path Traversal Trust Boundary
+### 4. Path Traversal Trust Boundary
 
 The loaders (`loadPartials`, `discoverPersonaYamls`, `loadContent`) pass caller-supplied paths directly to `fs/promises` APIs. This is acceptable for a build-time library with developer-controlled paths. If any future layer exposes these functions to CLI arguments, plugin-provided paths, or HTTP input, a `path.resolve(input).startsWith(allowedRoot)` containment guard must be added before that exposure.
 
@@ -107,10 +105,10 @@ Shared partials (cross-suite) are loaded from `BuildConfig.sharedPartialsDir`. S
 |-----------|-------|------------|
 | `tests/engine/` | Pure engine functions | 74 |
 | `tests/loaders/` | File I/O loaders | 40 |
-| `tests/plugins/` | Plugin runner hooks | 27 |
-| `tests/builders/` | Build orchestration | 33 |
+| `tests/plugins/` | Plugin runner (27) + ledger (48) | 75 |
+| `tests/builders/` | Build orchestration (25) + edge-cases (8) | 33 |
 | `tests/validators/` | Validation functions | 46 |
 | `tests/integration/` | End-to-end builds against fixtures | 7 |
-| **Total** | | **227** |
+| **Total** | | **275** |
 
 All tests use Vitest with `globals: true`. Integration tests operate against the `fixtures/` directory.

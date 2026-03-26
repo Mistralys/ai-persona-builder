@@ -8,14 +8,11 @@
  *   - BuildResult     — outcome of building a single persona
  *   - BuildSummary    — aggregated result returned by build()
  *
- * TargetType is re-exported from plugins/types so consumers can import
- * everything builder-related from a single module.
+ * TargetType is defined in src/plugins/types.ts and exported via the
+ * canonical path: src/plugins/index.ts → src/index.ts.
  */
 
 import type { PersonaBuildPlugin, SuiteConfig, ValidationResult } from '../plugins/types.js';
-
-// Re-export TargetType so consumers can import it directly from this module.
-export type { TargetType } from '../plugins/types.js';
 
 // ---------------------------------------------------------------------------
 // Build configuration

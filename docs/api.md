@@ -12,7 +12,8 @@ All public symbols are exported from `@mistralys/persona-builder`:
 | `PersonaBuildPlugin` | type | Plugin interface — implement to extend the build pipeline. |
 | `TargetType` | type | Union type: `'vscode' \| 'claude-code'`. |
 | `ValidationResult` | type | `{ severity: 'error' \| 'warning', message: string }` — returned by `onValidate` hooks. |
-| `VERSION` | `string` | Package version string (e.g. `'1.0.0'`), sourced from `package.json` at runtime. |
+| `escapeRegExp` | function | Escapes a string for safe use inside a `new RegExp(...)` constructor. Exported from `src/utils/regex.ts`. |
+| `VERSION` | `string` | Package version string (e.g. `'1.0.1'`), sourced from `package.json` at runtime. |
 
 ```ts
 import { build, VERSION } from '@mistralys/persona-builder';
@@ -47,4 +48,4 @@ import { ledgerPlugin } from '@mistralys/persona-builder/plugins/ledger';
 | `FRONTMATTER_LEDGER_VSCODE` | `string` | VS Code frontmatter template for the ledger suite |
 | `FRONTMATTER_LEDGER_CC` | `string` | Claude Code frontmatter template for the ledger suite |
 
-See [Plugins → Ledger Plugin](plugins.md#ledger-plugin----mistralys-persona-builderpluginsledger) for full documentation, usage example, and the `warnOnUnknownRole` known limitation.
+See [Plugins → Ledger Plugin](plugins.md#ledger-plugin----mistralys-persona-builderpluginsledger) for full documentation, usage example, the `LedgerPluginOptions` reference, and the Validator Severity Escalation Pattern.

@@ -4,7 +4,6 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
-    'plugins/ledger/index': 'src/plugins/ledger/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

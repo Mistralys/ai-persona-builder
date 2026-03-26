@@ -6,7 +6,6 @@
  */
 
 export type { BuildConfig, BuildResult, BuildSummary } from './types.js';
-export type { TargetType } from './types.js';
 
 export {
   DEFAULT_FRONTMATTER_VSCODE,

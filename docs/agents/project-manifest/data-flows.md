@@ -102,7 +102,7 @@ Per persona, hooks fire in this order:
 1. onSuiteInit(suite, sharedMeta)          ← once per suite (before any persona)
 2. onBuildContext(context, persona, suite)  ← per persona, before rendering
 3. onPostRender(output, persona, target)   ← per persona, after rendering
-4. onValidate(persona, suite)              ← per persona, after post-render
+4. onValidate(persona, suite, target?)     ← per persona, after post-render
 ```
 
 Within each hook, plugins are invoked in **registration order** (array index in `config.plugins`).

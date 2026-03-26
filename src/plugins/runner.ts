@@ -131,17 +131,19 @@ export function runPostRender(
  * @param plugins Ordered list of registered plugins
  * @param persona Typed metadata for the persona being built
  * @param suite   The suite configuration object
+ * @param target  The current build target (optional — forwarded to each plugin)
  * @returns       Flat array of all ValidationResult objects from all plugins
  */
 export function runValidate(
   plugins: PersonaBuildPlugin[],
   persona: PersonaMetadata,
   suite: SuiteConfig,
+  target?: TargetType,
 ): ValidationResult[] {
   const results: ValidationResult[] = [];
   for (const plugin of plugins) {
     if (typeof plugin.onValidate === 'function') {
-      const pluginResults = plugin.onValidate(persona, suite);
+      const pluginResults = plugin.onValidate(persona, suite, target);
       results.push(...pluginResults);
     }
   }

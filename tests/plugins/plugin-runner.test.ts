@@ -370,11 +370,19 @@ describe('runValidate()', () => {
   });
 
   // 1-plugin scenario: receives correct arguments
-  it('passes persona and suite to the plugin hook', () => {
+  it('passes persona, suite, and target to the plugin hook', () => {
     const onValidate = vi.fn(() => [] as ValidationResult[]);
     const plugin: PersonaBuildPlugin = { name: 'arg-check', onValidate };
+    runValidate([plugin], persona, suite, 'vscode');
+    expect(onValidate).toHaveBeenCalledWith(persona, suite, 'vscode');
+  });
+
+  // 1-plugin scenario: target is forwarded as undefined when not supplied
+  it('forwards undefined target when no target argument is provided', () => {
+    const onValidate = vi.fn(() => [] as ValidationResult[]);
+    const plugin: PersonaBuildPlugin = { name: 'no-target', onValidate };
     runValidate([plugin], persona, suite);
-    expect(onValidate).toHaveBeenCalledWith(persona, suite);
+    expect(onValidate).toHaveBeenCalledWith(persona, suite, undefined);
   });
 
   // 1-plugin: returns empty array from plugin

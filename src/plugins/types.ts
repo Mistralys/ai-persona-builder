@@ -158,9 +158,10 @@ export interface PersonaBuildPlugin {
    *
    * @param persona Typed metadata for the persona being built
    * @param suite   The suite configuration object
+   * @param target  The current build target (optional — absent in single-target contexts)
    * @returns       Array of validation results (may be empty)
    */
-  onValidate?(persona: PersonaMetadata, suite: SuiteConfig): ValidationResult[];
+  onValidate?(persona: PersonaMetadata, suite: SuiteConfig, target?: TargetType): ValidationResult[];
 
   /**
    * Optional map of custom frontmatter templates keyed by target type.

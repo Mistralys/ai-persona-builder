@@ -248,7 +248,7 @@ export async function buildPersona(
   output = runPostRender(plugins, output, personaMetaTyped, target);
 
   // ── 9. Plugin onValidate ──────────────────────────────────────────────────
-  const validationResults: ValidationResult[] = runValidate(plugins, personaMetaTyped, suiteConfig);
+  const validationResults: ValidationResult[] = runValidate(plugins, personaMetaTyped, suiteConfig, target);
 
   // ── 10. Determine output file path ────────────────────────────────────────
   const outputDir = target === 'vscode' ? suiteConfig.outVscode : suiteConfig.outClaudeCode;
