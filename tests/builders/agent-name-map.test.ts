@@ -99,7 +99,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'consumer.yaml',
-          yaml: "slug: consumer\nname: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nInvoke {{agent_helper}} for help.\n',
         },
       ],
@@ -110,7 +110,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'helper.yaml',
-          yaml: "slug: helper\nname: Helper\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
           content: '# {{name}}\n\nI am the helper.\n',
         },
       ],
@@ -151,7 +151,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'consumer.yaml',
-          yaml: "slug: consumer\nname: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nUse {{agent_my_great_agent}} here.\n',
         },
       ],
@@ -161,7 +161,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'my-great-agent.yaml',
-          yaml: "slug: my-great-agent\nname: My Great Agent\nversion: '3.0.0'\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
+          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nversion: '3.0.0'\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
           content: '# {{name}}\n\nGreat!\n',
         },
       ],
@@ -196,7 +196,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'consumer.yaml',
-          yaml: "name: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "name: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nUse {{agent_some_helper}} here.\n',
         },
       ],
@@ -207,7 +207,7 @@ describe('cross-suite agent name map', () => {
         {
           filename: 'some-helper.yaml',
           // No slug field — should fall back to filename stem "some-helper"
-          yaml: "name: Some Helper\nversion: '1.5.0'\nvs_file_name: some-helper.agent.md\ncc_file_name: some-helper.md\n",
+          yaml: "name: Some Helper\ndescription: Test persona\nversion: '1.5.0'\nvs_file_name: some-helper.agent.md\ncc_file_name: some-helper.md\n",
           content: '# {{name}}\n\nHelping!\n',
         },
       ],
@@ -242,7 +242,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'consumer.yaml',
-          yaml: "slug: consumer\nname: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nUse {{agent_provider}} here.\n',
         },
       ],
@@ -254,7 +254,7 @@ describe('cross-suite agent name map', () => {
         {
           filename: 'provider.yaml',
           // No version field — should fall back to default_version "4.2.0"
-          yaml: "slug: provider\nname: Provider\nvs_file_name: provider.agent.md\ncc_file_name: provider.md\n",
+          yaml: "slug: provider\nname: Provider\ndescription: Test persona\nvs_file_name: provider.agent.md\ncc_file_name: provider.md\n",
           content: '# {{name}}\n\nProviding!\n',
         },
       ],
@@ -290,7 +290,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'consumer.yaml',
-          yaml: "slug: consumer\nname: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nUse {{agent_fallback}} here.\n',
         },
       ],
@@ -302,7 +302,7 @@ describe('cross-suite agent name map', () => {
         {
           filename: 'fallback.yaml',
           // No version, no default_version → should fall back to "0.0.0"
-          yaml: "slug: fallback\nname: Fallback Agent\nvs_file_name: fallback.agent.md\ncc_file_name: fallback.md\n",
+          yaml: "slug: fallback\nname: Fallback Agent\ndescription: Test persona\nvs_file_name: fallback.agent.md\ncc_file_name: fallback.md\n",
           content: '# {{name}}\n\nFallback!\n',
         },
       ],
@@ -337,12 +337,12 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'alpha.yaml',
-          yaml: "slug: alpha\nname: Alpha Agent\nvs_file_name: alpha.agent.md\ncc_file_name: alpha.md\n",
+          yaml: "slug: alpha\nname: Alpha Agent\ndescription: Test persona\nvs_file_name: alpha.agent.md\ncc_file_name: alpha.md\n",
           content: '# {{name}}\n\nPartner: {{agent_beta}}\n',
         },
         {
           filename: 'beta.yaml',
-          yaml: "slug: beta\nname: Beta Agent\nvs_file_name: beta.agent.md\ncc_file_name: beta.md\n",
+          yaml: "slug: beta\nname: Beta Agent\ndescription: Test persona\nvs_file_name: beta.agent.md\ncc_file_name: beta.md\n",
           content: '# {{name}}\n\nPartner: {{agent_alpha}}\n',
         },
       ],
@@ -381,7 +381,7 @@ describe('cross-suite agent name map', () => {
         {
           filename: 'consumer.yaml',
           // Explicitly defines agent_helper as a YAML field
-          yaml: "slug: consumer\nname: Consumer\nagent_helper: Custom Override\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nagent_helper: Custom Override\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
           content: '# {{name}}\n\nInvoke {{agent_helper}} here.\n',
         },
       ],
@@ -391,7 +391,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'helper.yaml',
-          yaml: "slug: helper\nname: Helper\nversion: '2.0.0'\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nversion: '2.0.0'\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
           content: '# {{name}}\n\nHelping!\n',
         },
       ],
