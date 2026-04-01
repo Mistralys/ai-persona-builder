@@ -65,6 +65,15 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 
 ---
 
+## package.json Path Conventions
+
+When modifying paths in `package.json`, strictly adhere to these prefix rules to satisfy both npm and Node.js module resolution:
+
+1. **`bin` paths MUST NOT start with `./`** (e.g., `"dist/cli.js"`). npm's strict normalizer treats `bin` as OS file paths and will strip `./` automatically, generating a confusing warning during `npm pack` or `npm publish` if it is present.
+2. **`exports`, `main`, `module`, and `types` paths MUST start with `./`** (e.g., `"./dist/index.js"`). Node.js requires this exact format for local module resolution; omitting it will cause an `ERR_INVALID_PACKAGE_TARGET` error at runtime.
+
+---
+
 ## Known Limitations
 
 ### 1. `serializeTools` Single-Quote Escaping
