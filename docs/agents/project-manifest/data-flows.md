@@ -7,9 +7,19 @@ The main `build(config)` entry point orchestrates the entire pipeline:
 ```
 build(config)
   │
+  ├─ Pre-scan: buildAgentNameMap(config)
+  │     │
+  │     ├─ For each suite in config.suites:
+  │     │     ├─ Load _shared.yaml → default_version fallback
+  │     │     ├─ Discover persona YAML files
+  │     │     └─ For each persona:
+  │     │           key   = "agent_" + slug (hyphens → underscores)
+  │     │           value = "<name> v<version>"
+  │     └─ Return agentMap: Record<string, string>
+  │
   ├─ For each suite in config.suites:
   │     │
-  │     ├─ buildSuite(suiteName, suiteConfig, config, plugins)
+  │     ├─ buildSuite(suiteName, suiteConfig, config, plugins, agentMap)
   │     │     │
   │     │     ├─ Load _shared.yaml → sharedMeta
   │     │     ├─ Load partials (shared → suite-local overlay) → partialsMap
@@ -18,10 +28,10 @@ build(config)
   │     │     │
   │     │     └─ For each persona × each target:
   │     │           │
-  │     │           └─ buildPersona(yamlPath, …, target)
+  │     │           └─ buildPersona(yamlPath, …, target, agentMap)
   │     │                 │
   │     │                 ├─ 1. Load persona YAML → personaMeta
-  │     │                 ├─ 2. Merge context (sharedMeta + personaMeta + derived fields)
+  │     │                 ├─ 2. Merge context (sharedMeta + personaMeta + derived fields + agentMap)
   │     │                 ├─ 3. Run onBuildContext hooks (context accumulation)
   │     │                 ├─ 4. Resolve frontmatter template (plugin → config → default)
   │     │                 ├─ 5. Render frontmatter (conditionals → variables)
@@ -56,7 +66,9 @@ Template variables are resolved from a merged context object. Later values win:
    ↓ augmented by
 3. Derived convenience fields    (version, tools_list, cc_file_name_stem, etc.)
    ↓ augmented by
-4. Plugin onBuildContext hooks    (each plugin mutates/extends context)
+4. Cross-suite agent name map    (agent_* keys, only when not already present)
+   ↓ augmented by
+5. Plugin onBuildContext hooks    (each plugin mutates/extends context)
 ```
 
 ### Derived Fields (auto-computed)
@@ -69,6 +81,7 @@ Template variables are resolved from a merged context object. Later values win:
 | `cc_tools_list` | `serializeToolsList(cc_tools ?? tools)` |
 | `cc_tools_json` | `serializeTools(cc_tools ?? tools)` |
 | `cc_file_name_stem` | `cc_file_name` with `.md` extension stripped |
+| `agent_<slug>` | `"<name> v<version>"` for every persona across all suites; slug hyphens → underscores |
 
 Derived fields are only set when not already present in the merged context — explicit YAML values always win.
 

@@ -6,15 +6,16 @@
  * Exports three public functions:
  *
  *  1. buildPersona(personaYamlPath, suiteName, suiteConfig, sharedMeta,
- *                  partialsMap, config, plugins)
+ *                  partialsMap, config, plugins, target, agentMap?)
  *     — Builds a single persona for a single target. Returns a BuildResult.
  *
- *  2. buildSuite(suiteName, suiteConfig, config, plugins)
+ *  2. buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap?)
  *     — Discovers all persona YAMLs for a suite, fires onSuiteInit, maps
  *       buildPersona() over each, and returns BuildResult[].
  *
  *  3. build(config)
- *     — Top-level entry point. Iterates all suites × targets, calls
+ *     — Top-level entry point. Pre-scans all suites to build a cross-suite
+ *       agent name map, then iterates all suites × targets, calls
  *       buildSuite() for each combination, and returns a BuildSummary.
  *       Respects --check (no writes) and --strict (fail on warnings/errors).
  */
@@ -113,20 +114,79 @@ async function loadPersonaYaml(yamlPath: string): Promise<Record<string, unknown
 }
 
 /**
+ * Pre-scan all suites and build a cross-suite agent name map.
+ *
+ * For each persona across all configured suites, creates a context variable:
+ *   key:   `agent_` + slug (hyphens → underscores)
+ *   value: `"<name> v<version>"`
+ *
+ * Slug is taken from the persona YAML's `slug` field, falling back to the
+ * filename stem. Version falls back to the suite's `default_version`, then
+ * to `'0.0.0'`.
+ *
+ * @param config  Top-level BuildConfig with all suite definitions
+ * @returns       Map of agent variable keys to display strings
+ */
+async function buildAgentNameMap(
+  config: BuildConfig,
+): Promise<Record<string, string>> {
+  const agentMap: Record<string, string> = {};
+
+  for (const [, suiteConfig] of Object.entries(config.suites)) {
+    const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
+    const sharedYamlPath = path.join(suiteConfig.srcDir, metaSubdir, '_shared.yaml');
+    const sharedMeta = await loadRawYaml(sharedYamlPath);
+    const defaultVersion =
+      typeof sharedMeta['default_version'] === 'string'
+        ? sharedMeta['default_version']
+        : '0.0.0';
+
+    const personaYamls = await discoverSuitePersonaYamls(suiteConfig);
+
+    for (const yamlPath of personaYamls) {
+      const persona = await loadPersonaYaml(yamlPath);
+
+      const slug =
+        typeof persona['slug'] === 'string'
+          ? persona['slug']
+          : path.basename(yamlPath, '.yaml');
+
+      const name =
+        typeof persona['name'] === 'string'
+          ? persona['name']
+          : slug;
+
+      const version =
+        typeof persona['version'] === 'string'
+          ? persona['version']
+          : defaultVersion;
+
+      const key = `agent_${slug.replace(/-/g, '_')}`;
+      agentMap[key] = `${name} v${version}`;
+    }
+  }
+
+  return agentMap;
+}
+
+/**
  * Build the merged template context for a single persona.
  *
  * Merge order (later values win):
  *   1. sharedMeta (suite-level defaults)
  *   2. per-persona YAML fields
  *   3. derived/computed fields (version fallback, etc.)
+ *   4. agentMap entries (only for keys not already present)
  *
  * @param personaMeta  Per-persona YAML as a plain record
  * @param sharedMeta   Parsed `_shared.yaml` fields
+ * @param agentMap     Cross-suite agent name map (injected by build())
  * @returns            Merged rendering context
  */
 function buildContext(
   personaMeta: Record<string, unknown>,
   sharedMeta: Record<string, unknown>,
+  agentMap: Record<string, string> = {},
 ): Record<string, unknown> {
   const version =
     typeof personaMeta['version'] === 'string'
@@ -165,6 +225,13 @@ function buildContext(
   if (!('cc_file_name_stem' in merged) && typeof merged['cc_file_name'] === 'string') {
     const ccFileName = merged['cc_file_name'] as string;
     merged['cc_file_name_stem'] = ccFileName.replace(/\.md$/, '');
+  }
+
+  // ── Cross-suite agent name variables ──────────────────────────────────────
+  for (const [key, value] of Object.entries(agentMap)) {
+    if (!(key in merged)) {
+      merged[key] = value;
+    }
   }
 
   return merged;
@@ -210,12 +277,13 @@ export async function buildPersona(
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
   target: 'vscode' | 'claude-code',
+  agentMap: Record<string, string> = {},
 ): Promise<BuildResult> {
   // ── 1. Load persona metadata ──────────────────────────────────────────────
   const personaMeta = await loadPersonaYaml(personaYamlPath);
 
   // ── 2. Build merged context ───────────────────────────────────────────────
-  let context = buildContext(personaMeta, sharedMeta);
+  let context = buildContext(personaMeta, sharedMeta, agentMap);
 
   // ── 3. Plugin onBuildContext ──────────────────────────────────────────────
   // Cast context to PersonaMetadata for the plugin runner (it requires a
@@ -312,6 +380,7 @@ export async function buildSuite(
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
   target: 'vscode' | 'claude-code',
+  agentMap: Record<string, string> = {},
 ): Promise<BuildResult[]> {
   // ── 1. Load shared metadata ───────────────────────────────────────────────
   const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
@@ -349,6 +418,7 @@ export async function buildSuite(
       config,
       plugins,
       target,
+      agentMap,
     );
     results.push(result);
   }
@@ -384,9 +454,12 @@ export async function build(config: BuildConfig): Promise<BuildSummary> {
   const targets = config.targets ?? ['vscode', 'claude-code'];
   const allResults: BuildResult[] = [];
 
+  // Pre-scan: build cross-suite agent name map
+  const agentMap = await buildAgentNameMap(config);
+
   for (const [suiteName, suiteConfig] of Object.entries(config.suites)) {
     for (const target of targets) {
-      const suiteResults = await buildSuite(suiteName, suiteConfig, config, plugins, target);
+      const suiteResults = await buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap);
       allResults.push(...suiteResults);
     }
   }

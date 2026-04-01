@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -291,5 +291,83 @@ describe('build() integration — plugin hooks', () => {
     // Plugin should have seen the example-persona name
     expect(contextCallLog).toContain('Example Persona');
     expect(postRenderCallLog).toContain('Example Persona:vscode');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration test: cross-suite agent name variable resolution
+// ---------------------------------------------------------------------------
+
+describe('build() integration — cross-suite agent name variables', () => {
+  const AGENT_MAP_BASE = path.join(OUT_ROOT, 'agent-map');
+
+  it('resolves {{agent_*}} variables when multiple suites are configured', async () => {
+    // Create two suites in temp output dirs
+    const suiteADir = path.join(AGENT_MAP_BASE, 'suite-a', 'src');
+    const suiteBDir = path.join(AGENT_MAP_BASE, 'suite-b', 'src');
+    const outVsA = path.join(AGENT_MAP_BASE, 'suite-a', 'out', 'vscode');
+    const outCcA = path.join(AGENT_MAP_BASE, 'suite-a', 'out', 'claude-code');
+    const outVsB = path.join(AGENT_MAP_BASE, 'suite-b', 'out', 'vscode');
+    const outCcB = path.join(AGENT_MAP_BASE, 'suite-b', 'out', 'claude-code');
+
+    // Suite A: consumer references {{agent_helper}} from suite B
+    await mkdir(path.join(suiteADir, 'meta'), { recursive: true });
+    await mkdir(path.join(suiteADir, 'content'), { recursive: true });
+    await writeFile(
+      path.join(suiteADir, 'meta', '_shared.yaml'),
+      "default_version: '1.0.0'\n",
+    );
+    await writeFile(
+      path.join(suiteADir, 'meta', 'consumer.yaml'),
+      "slug: consumer\nname: Consumer\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+    );
+    await writeFile(
+      path.join(suiteADir, 'content', 'consumer.md'),
+      '# {{name}}\n\nInvoke {{agent_helper}} for assistance.\n',
+    );
+
+    // Suite B: helper persona
+    await mkdir(path.join(suiteBDir, 'meta'), { recursive: true });
+    await mkdir(path.join(suiteBDir, 'content'), { recursive: true });
+    await writeFile(
+      path.join(suiteBDir, 'meta', '_shared.yaml'),
+      "default_version: '2.5.0'\n",
+    );
+    await writeFile(
+      path.join(suiteBDir, 'meta', 'helper.yaml'),
+      "slug: helper\nname: Helper\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+    );
+    await writeFile(
+      path.join(suiteBDir, 'content', 'helper.md'),
+      '# {{name}}\n\nI am the helper.\n',
+    );
+
+    const config: BuildConfig = {
+      suites: {
+        'suite-a': {
+          srcDir: suiteADir,
+          outVscode: outVsA,
+          outClaudeCode: outCcA,
+        },
+        'suite-b': {
+          srcDir: suiteBDir,
+          outVscode: outVsB,
+          outClaudeCode: outCcB,
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+    };
+
+    const summary = await build(config);
+    expect(summary.success).toBe(true);
+
+    const consumerResult = summary.results.find(
+      (r) => r.suite === 'suite-a' && path.basename(r.outputPath) === 'consumer.agent.md',
+    );
+    expect(consumerResult).toBeDefined();
+    // {{agent_helper}} should resolve to "Helper v2.5.0"
+    expect(consumerResult!.content).toContain('Invoke Helper v2.5.0 for assistance.');
+    expect(consumerResult!.content).not.toContain('{{agent_helper}}');
   });
 });

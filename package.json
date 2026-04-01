@@ -1,6 +1,6 @@
 {
   "name": "@mistralys/persona-builder",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Standalone library for building AI persona documents from YAML metadata and Markdown content templates.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -20,6 +20,7 @@
     "dist"
   ],
   "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
