@@ -34,6 +34,7 @@
 | `tsup` | Build tool (CJS + ESM bundling, declaration generation). |
 | `typescript` | Type-checking (`tsc --noEmit`). |
 | `vitest` | Test framework. |
+| `@vitest/coverage-v8` | Code coverage provider for Vitest. |
 | `@types/js-yaml` | Type declarations for `js-yaml`. |
 | `@types/node` | Node.js type declarations. |
 

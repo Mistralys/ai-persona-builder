@@ -62,7 +62,8 @@
 │   │   └── content-loader.test.ts
 │   ├── plugins/                    # Plugin system tests (27 tests)
 │   │   └── plugin-runner.test.ts
-│   ├── builders/                   # Builder tests (33 tests)
+│   ├── builders/                   # Builder tests (40 tests)
+│   │   ├── agent-name-map.test.ts
 │   │   ├── persona-builder.test.ts
 │   │   └── persona-builder-edge-cases.test.ts
 │   ├── validators/                 # Validator tests (46 tests)

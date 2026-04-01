@@ -14,7 +14,7 @@
 |----------|----------|
 | [README.md](docs/agents/project-manifest/README.md) | Project overview, version, and manifest index. |
 | [tech-stack.md](docs/agents/project-manifest/tech-stack.md) | Runtime, frameworks, architectural patterns, build tooling, distribution format. |
-| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (22 source files, 14 test files, fixtures). |
+| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (22 source files, 15 test files, fixtures). |
 | [api-surface.md](docs/agents/project-manifest/api-surface.md) | All exported types, functions, and constants — signatures only. |
 | [data-flows.md](docs/agents/project-manifest/data-flows.md) | Build pipeline, context merge order, plugin hooks, CLI flow. |
 | [constraints.md](docs/agents/project-manifest/constraints.md) | Architectural invariants, naming rules, known limitations. |
@@ -123,13 +123,13 @@ Unclear → Pause and request user clarification
 | Property | Value |
 |----------|-------|
 | **Package** | `@mistralys/persona-builder` |
-| **Version** | 1.0.0 |
+| **Version** | 2.1.0 |
 | **Language** | TypeScript 5.8.2 (ES2022) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |
 | **Architecture** | Layered: builders → plugins → engine / loaders / validators |
 | **Package Manager** | npm |
 | **Build Tool** | tsup (dual CJS + ESM) |
-| **Test Framework** | Vitest (227 tests across 14 files) |
+| **Test Framework** | Vitest (236 tests across 15 files) |
 | **Production Dependency** | `js-yaml` (sole) |
 | **License** | MIT |
 
@@ -156,8 +156,7 @@ The repo follows a layered architecture. Key directories:
 | `src/engine/` | Pure template rendering functions (zero external dependencies) |
 | `src/loaders/` | File I/O — YAML metadata, Markdown content, partials |
 | `src/builders/` | Build orchestration (`build()`, `buildSuite()`, `buildPersona()`) |
-| `src/plugins/` | Plugin runner, types, and first-party plugins |
-| `src/plugins/ledger/` | Ledger plugin — sub-path export `@mistralys/persona-builder/plugins/ledger` |
+| `src/plugins/` | Plugin runner, types, and plugin interface |
 | `src/validators/` | Filename and strict-mode validators |
 | `src/cli.ts` | `persona-build` CLI entry point |
 | `tests/` | Vitest test suites mirroring the `src/` structure |
@@ -173,7 +172,7 @@ See [`docs/agents/project-manifest/file-tree.md`](docs/agents/project-manifest/f
 npm test
 ```
 
-Runs all Vitest tests once (227 tests across 14 files). Use `npm run test:watch` during development.
+Runs all Vitest tests once (236 tests across 15 files). Use `npm run test:watch` during development.
 
 ### Build Command
 
@@ -181,7 +180,7 @@ Runs all Vitest tests once (227 tests across 14 files). Use `npm run test:watch`
 npm run build
 ```
 
-Produces dual CJS + ESM output via tsup into `dist/`. Three entry points are compiled: `index`, `cli`, and `plugins/ledger/index`.
+Produces dual CJS + ESM output via tsup into `dist/`. Two entry points are compiled: `index` and `cli`.
 
 ### How to Add a New Plugin
 
@@ -208,7 +207,6 @@ Produces dual CJS + ESM output via tsup into `dist/`. Three entry points are com
    entry: [
      'src/index.ts',
      'src/cli.ts',
-     'src/plugins/ledger/index.ts',
      'src/plugins/my-plugin/index.ts',   // ← add this
    ],
    ```

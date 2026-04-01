@@ -114,10 +114,10 @@ Shared partials (cross-suite) are loaded from `BuildConfig.sharedPartialsDir`. S
 |-----------|-------|------------|
 | `tests/engine/` | Pure engine functions | 74 |
 | `tests/loaders/` | File I/O loaders | 40 |
-| `tests/plugins/` | Plugin runner (27) + ledger (48) | 75 |
-| `tests/builders/` | Build orchestration (25) + edge-cases (8) | 33 |
+| `tests/plugins/` | Plugin runner | 28 |
+| `tests/builders/` | Build orchestration + edge-cases + agent-name-map | 40 |
 | `tests/validators/` | Validation functions | 46 |
-| `tests/integration/` | End-to-end builds against fixtures | 7 |
-| **Total** | | **275** |
+| `tests/integration/` | End-to-end builds against fixtures | 8 |
+| **Total** | | **236** |
 
 All tests use Vitest with `globals: true`. Integration tests operate against the `fixtures/` directory.
