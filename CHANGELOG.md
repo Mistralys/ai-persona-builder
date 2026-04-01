@@ -2,7 +2,12 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
-## v2.0.1 - Vulnerable Dependency Fix
+## v2.1.0 - Cross-Suite Agent Name Variables
+- Builder: Added agent name map pre-scan across all configured suites.
+- Builder: Injects `agent_<slug>` context variables for every persona.
+- Tests: Added dedicated agent name map test suite.
+- Tests: Extended integration tests for agent name variable resolution.
+- Docs: Updated api-surface and data-flows for new signatures.
 - Dependencies: Updated to remove vulnerable versions.
 
 ## v2.0.0 - Ledger Plugin Removal (Breaking-M)
