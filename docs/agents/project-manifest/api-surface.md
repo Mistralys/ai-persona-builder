@@ -24,9 +24,9 @@ Package version string sourced from `package.json` at runtime via `createRequire
 export async function build(config: BuildConfig): Promise<BuildSummary>;
 ```
 
-Main entry point. Iterates all suites × targets, orchestrates the full pipeline (discover → load → render → validate → write), and returns an aggregated summary. Respects `check` (no writes) and `strict` (fail on warnings/errors) flags.
+Main entry point. Pre-scans all suites to build a cross-suite agent name map (`agent_*` variables), then iterates all suites × targets, orchestrates the full pipeline (discover → load → render → validate → write), and returns an aggregated summary. Respects `check` (no writes) and `strict` (fail on warnings/errors) flags.
 
-### `buildSuite(suiteName, suiteConfig, config, plugins)`
+### `buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap?)`
 
 ```ts
 export async function buildSuite(
@@ -34,12 +34,14 @@ export async function buildSuite(
   suiteConfig: SuiteConfig,
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
+  target: 'vscode' | 'claude-code',
+  agentMap?: Record<string, string>,
 ): Promise<BuildResult[]>;
 ```
 
-Builds all personas in a single suite for all configured targets. Loads `_shared.yaml`, merges partials, fires `onSuiteInit`, discovers persona YAMLs, and delegates to `buildPersona()`.
+Builds all personas in a single suite for a single target. Loads `_shared.yaml`, merges partials, fires `onSuiteInit`, discovers persona YAMLs, and delegates to `buildPersona()`. The optional `agentMap` is forwarded to each persona build.
 
-### `buildPersona(personaYamlPath, suiteName, suiteConfig, sharedMeta, partialsMap, config, plugins, target)`
+### `buildPersona(personaYamlPath, suiteName, suiteConfig, sharedMeta, partialsMap, config, plugins, target, agentMap?)`
 
 ```ts
 export async function buildPersona(
@@ -51,6 +53,7 @@ export async function buildPersona(
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
   target: 'vscode' | 'claude-code',
+  agentMap?: Record<string, string>,
 ): Promise<BuildResult>;
 ```
 
