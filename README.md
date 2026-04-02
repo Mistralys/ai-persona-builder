@@ -91,3 +91,13 @@ the `PersonaBuildPlugin` interface, examples, and the available hooks.
 ## 📄 License
 
 MIT
+
+---
+
+## Release Workflow
+
+1. Add changelog entries
+2. `npm version 0.0.0` - Updates package and lock versions + commit
+3. `npm publish` - Publish version on NPM
+4. `git push origin 0.0.0` - Add the tag in GIT
+5. Add the release on Github
