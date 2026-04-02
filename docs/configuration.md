@@ -23,7 +23,7 @@ Per-suite configuration nested inside `BuildConfig.suites`.
 | `srcDir` | `string` | **required** | Absolute or relative path to the suite source directory. |
 | `outVscode` | `string` | **required** | Output directory for VS Code persona files. |
 | `outClaudeCode` | `string` | **required** | Output directory for Claude Code persona files. |
-| `personaMode` | `string` | `undefined` | Optional mode string passed to plugins (e.g. `'ledger'`). |
+| `personaMode` | `string` | `undefined` | Passthrough value exposed to plugins. The core library does nothing with it; its meaning is entirely plugin-defined. Use it to vary plugin behaviour per suite (e.g. apply different rendering logic when `personaMode === 'ledger'` vs `personaMode === 'standalone'`). Plugins can read it inside `onSuiteInit` and `onBuildContext` via `suite.personaMode`. |
 | `partialsSubdir` | `string` | `'partials'` | Sub-directory within `srcDir` containing suite-local partials. |
 | `metaSubdir` | `string` | `'meta'` | Sub-directory within `srcDir` containing YAML metadata files. |
 | `contentSubdir` | `string` | `'content'` | Sub-directory within `srcDir` containing Markdown content templates. |

@@ -2,6 +2,13 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.1.2 - Documentation Update
+- Docs: Removed stale ledgfer plugin references.
+- Docs: Optimized docs for use as a library in other projects.
+
+## v2.1.1 - Manifest Update
+- Docs: Updated the Manifest docs.
+
 ## v2.1.0 - Cross-Suite Agent Name Variables
 - Builder: Added agent name map pre-scan across all configured suites.
 - Builder: Injects `agent_<slug>` context variables for every persona.

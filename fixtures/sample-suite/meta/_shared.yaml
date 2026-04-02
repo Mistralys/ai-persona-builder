@@ -3,4 +3,4 @@ author: sample-author
 last_updated: '2026-03-25'
 cc_permission_mode: default
 cc_model: claude-sonnet-4-5
-cc_memory: false
+cc_memory: false  # also accepts: 'project', 'user'

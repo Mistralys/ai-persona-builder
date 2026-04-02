@@ -69,7 +69,7 @@
 │   ├── validators/                 # Validator tests (46 tests)
 │   │   ├── filename-validator.test.ts
 │   │   └── strict-validator.test.ts
-│   └── integration/                # End-to-end integration tests (7 tests)
+│   └── integration/                # End-to-end integration tests (8 tests)
 │       └── build.test.ts
 │
 ├── fixtures/                       # Test fixtures
@@ -87,6 +87,14 @@
 │
 ├── dist/                           # Build output (gitignored)
 └── docs/
+    ├── getting-started.md          # Step-by-step tutorial with verified rendered output
+    ├── metadata-reference.md       # All recognized YAML metadata fields by tier
+    ├── api.md                      # Public exports reference
+    ├── cli.md                      # CLI flags and config file format
+    ├── configuration.md            # BuildConfig / SuiteConfig / BuildSummary reference
+    ├── directory-convention.md     # Expected source layout
+    ├── plugins.md                  # PersonaBuildPlugin interface and examples
+    ├── template-syntax.md          # Variables, partials, conditionals, built-in context vars
     └── agents/
         └── project-manifest/       # This manifest
 ```

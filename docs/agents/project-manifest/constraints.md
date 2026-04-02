@@ -92,6 +92,17 @@ The default Claude Code frontmatter template references these three context vari
 
 The loaders (`loadPartials`, `discoverPersonaYamls`, `loadContent`) pass caller-supplied paths directly to `fs/promises` APIs. This is acceptable for a build-time library with developer-controlled paths. If any future layer exposes these functions to CLI arguments, plugin-provided paths, or HTTP input, a `path.resolve(input).startsWith(allowedRoot)` containment guard must be added before that exposure.
 
+### 5. Ledger Plugin Removed in v2.0.0
+
+The `@mistralys/persona-builder/plugins/ledger` sub-path export was removed in v2.0.0 and
+has been migrated to the `ai-insights` workspace as a local CommonJS module at
+`personas/plugins/ledger/`. The symbols `ledgerPlugin`, `LedgerPluginOptions`, `RosterEntry`,
+`McpToolEntry`, `renderRoster`, `renderMcpToolsTable`, `validateRole`,
+`validateNoteOnlyGuard`, `FRONTMATTER_LEDGER_VSCODE`, and `FRONTMATTER_LEDGER_CC` are no
+longer exported by this package. Any code that imports from
+`@mistralys/persona-builder/plugins/ledger` will receive an `ERR_PACKAGE_PATH_NOT_EXPORTED`
+error at runtime.
+
 ---
 
 ## Directory Convention

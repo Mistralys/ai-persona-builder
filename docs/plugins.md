@@ -76,8 +76,8 @@ const summary = await build({
 ### Custom frontmatter template via plugin
 
 ```ts
-const ledgerPlugin: PersonaBuildPlugin = {
-  name: 'ledger',
+const customFrontmatter: PersonaBuildPlugin = {
+  name: 'custom-frontmatter',
 
   frontmatterTemplates: {
     'claude-code': `---
@@ -113,6 +113,39 @@ const requiredFieldsPlugin: PersonaBuildPlugin = {
   },
 };
 ```
+
+### Reading `personaMode` in a plugin
+
+`personaMode` is a free-form string set per suite in `SuiteConfig`. The library does not
+interpret it — it is your plugin's signal to change behaviour based on which suite is
+being built.
+
+```ts
+import type { PersonaBuildPlugin } from '@mistralys/persona-builder';
+
+const modeAwarePlugin: PersonaBuildPlugin = {
+  name: 'mode-aware',
+
+  onSuiteInit(suite) {
+    // Called once per suite before any persona is built.
+    // suite.personaMode is whatever was set in SuiteConfig.personaMode.
+    if (suite.personaMode === 'numbered') {
+      console.log('Building numbered workflow suite');
+    }
+  },
+
+  onBuildContext(context, persona, suite) {
+    if (suite.personaMode === 'numbered') {
+      // Inject a mode-specific variable only for numbered suites
+      return { ...context, workflow_mode: 'numbered' };
+    }
+    return context;
+  },
+};
+```
+
+Known mode values are entirely plugin-defined. The library imposes no constraints on the
+string value — you choose the convention that suits your project.
 
 ---
 

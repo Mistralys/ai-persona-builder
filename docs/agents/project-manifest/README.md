@@ -30,3 +30,7 @@
 | **Public API Surface** | [api-surface.md](api-surface.md) | All exported types, functions, and constants — signatures only. |
 | **Key Data Flows** | [data-flows.md](data-flows.md) | Main interaction paths through the build pipeline. |
 | **Constraints & Conventions** | [constraints.md](constraints.md) | Architectural invariants, naming rules, and known limitations. |
+
+---
+
+**Manifest last revised:** 2026-04-02
