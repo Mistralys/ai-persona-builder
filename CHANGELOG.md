@@ -2,8 +2,11 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.1.3 - Target Variable Bugfix
+- Builder: Fixed target type variables being ignored.
+
 ## v2.1.2 - Documentation Update
-- Docs: Removed stale ledgfer plugin references.
+- Docs: Removed stale ledger plugin references.
 - Docs: Optimized docs for use as a library in other projects.
 
 ## v2.1.1 - Manifest Update
