@@ -44,7 +44,7 @@ import {
 
 import { resolveFrontmatterTemplate, renderFrontmatter } from './frontmatter.js';
 import type { BuildConfig, BuildResult, BuildSummary } from './types.js';
-import type { PersonaBuildPlugin, PersonaMetadata, SuiteConfig, ValidationResult } from '../plugins/types.js';
+import type { PersonaBuildPlugin, PersonaMetadata, SuiteConfig, TargetType, ValidationResult } from '../plugins/types.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -187,6 +187,7 @@ function buildContext(
   personaMeta: Record<string, unknown>,
   sharedMeta: Record<string, unknown>,
   agentMap: Record<string, string> = {},
+  target?: TargetType,
 ): Record<string, unknown> {
   const version =
     typeof personaMeta['version'] === 'string'
@@ -232,6 +233,11 @@ function buildContext(
     if (!(key in merged)) {
       merged[key] = value;
     }
+  }
+
+  // ── Target flag injection ─────────────────────────────────────────────────
+  if (target !== undefined) {
+    merged[`target_${target.replace(/-/g, '_')}`] = true;
   }
 
   return merged;
@@ -283,13 +289,13 @@ export async function buildPersona(
   const personaMeta = await loadPersonaYaml(personaYamlPath);
 
   // ── 2. Build merged context ───────────────────────────────────────────────
-  let context = buildContext(personaMeta, sharedMeta, agentMap);
+  let context = buildContext(personaMeta, sharedMeta, agentMap, target);
 
   // ── 3. Plugin onBuildContext ──────────────────────────────────────────────
   // Cast context to PersonaMetadata for the plugin runner (it requires a
   // name field which is guaranteed by loadPersonaYaml above).
   const personaMetaTyped = personaMeta as PersonaMetadata;
-  context = runBuildContext(plugins, context, personaMetaTyped, suiteConfig);
+  context = runBuildContext(plugins, context, personaMetaTyped, suiteConfig, target);
 
   // ── 4. Render frontmatter ─────────────────────────────────────────────────
   const fmTemplate = resolveFrontmatterTemplate(target, plugins, config.frontmatter);

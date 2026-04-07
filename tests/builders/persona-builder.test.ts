@@ -97,7 +97,7 @@ async function createMinimalSuite(
   await writeFile(
     path.join(suiteDir, 'meta', '_shared.yaml'),
     opts.sharedYaml ??
-      `default_version: '2.0.0'\nauthor: test-author\nlast_updated: '2026-01-01'\n`,
+      `default_version: '2.0.0'\nauthor: test-author\nlast_updated: '2026-01-01'\ncc_permission_mode: default\ncc_model: claude-opus-4-5\ncc_memory: project\n`,
   );
 
   // per-persona YAML

@@ -67,6 +67,7 @@ export function runSuiteInit(
  * @param ctx     Initial rendering context for this persona
  * @param persona Typed metadata for the persona being built
  * @param suite   The suite configuration object
+ * @param target  The current build target (optional — forwarded to each plugin)
  * @returns       Accumulated rendering context after all plugins have run
  */
 export function runBuildContext(
@@ -74,11 +75,12 @@ export function runBuildContext(
   ctx: Record<string, unknown>,
   persona: PersonaMetadata,
   suite: SuiteConfig,
+  target?: TargetType,
 ): Record<string, unknown> {
   let accumulated = ctx;
   for (const plugin of plugins) {
     if (typeof plugin.onBuildContext === 'function') {
-      accumulated = plugin.onBuildContext(accumulated, persona, suite);
+      accumulated = plugin.onBuildContext(accumulated, persona, suite, target);
     }
   }
   return accumulated;

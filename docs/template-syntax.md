@@ -40,6 +40,25 @@ The builder automatically derives several convenience variables from YAML metada
 | `{{cc_tools_list}}` | Comma-separated string of `cc_tools` (falls back to `tools`) |
 | `{{cc_tools_json}}` | JSON array string of `cc_tools` |
 | `{{cc_file_name_stem}}` | Stem of `cc_file_name` (filename without `.md` extension) |
+| `{{target_vscode}}` | `true` when building for the `vscode` target; absent otherwise |
+| `{{target_claude_code}}` | `true` when building for the `claude-code` target; absent otherwise |
+
+### Target Flags
+
+The `target_<name>` variables enable target-conditional content directly in templates.
+Only the active target's flag is injected (`true`); the other target's flag is absent
+and therefore falsy in conditionals.
+
+```
+{{#if target_vscode}}
+Content shown only in VS Code builds.
+{{else}}
+Content shown in all other builds (e.g. Claude Code).
+{{/if}}
+```
+
+The flag name is derived from the target identifier by replacing hyphens with
+underscores: `vscode` → `target_vscode`, `claude-code` → `target_claude_code`.
 
 ## Default Frontmatter Templates
 

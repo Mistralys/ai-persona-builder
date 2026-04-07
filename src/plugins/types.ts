@@ -135,6 +135,7 @@ export interface PersonaBuildPlugin {
     context: Record<string, unknown>,
     persona: PersonaMetadata,
     suite: SuiteConfig,
+    target?: TargetType,
   ): Record<string, unknown>;
 
   /**

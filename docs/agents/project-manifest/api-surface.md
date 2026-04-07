@@ -277,7 +277,7 @@ export function runSuiteInit(
 
 Invokes `onSuiteInit` on each plugin in order. `sharedMeta` is mutable (passed by reference).
 
-### `runBuildContext(plugins, ctx, persona, suite)`
+### `runBuildContext(plugins, ctx, persona, suite, target?)`
 
 ```ts
 export function runBuildContext(
@@ -285,10 +285,11 @@ export function runBuildContext(
   ctx: Record<string, unknown>,
   persona: PersonaMetadata,
   suite: SuiteConfig,
+  target?: TargetType,
 ): Record<string, unknown>;
 ```
 
-Accumulating hook — each plugin receives the previous plugin's returned context. Returns the final context.
+Accumulating hook — each plugin receives the previous plugin's returned context. The optional `target` parameter is forwarded to each plugin's `onBuildContext` call. Returns the final context.
 
 ### `runPostRender(plugins, rendered, persona, target)`
 
@@ -396,6 +397,7 @@ export interface PersonaBuildPlugin {
     context: Record<string, unknown>,
     persona: PersonaMetadata,
     suite: SuiteConfig,
+    target?: TargetType,
   ): Record<string, unknown>;
   onPostRender?(output: string, persona: PersonaMetadata, target: TargetType): string;
   onValidate?(persona: PersonaMetadata, suite: SuiteConfig, target?: TargetType): ValidationResult[];

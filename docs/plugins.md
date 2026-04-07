@@ -18,11 +18,13 @@ interface PersonaBuildPlugin {
   /**
    * Called for each persona before template rendering.
    * Mutate and return the context to inject additional template variables.
+   * The optional `target` parameter indicates the active build target.
    */
   onBuildContext?(
     context: Record<string, unknown>,
     persona: PersonaMetadata,
     suite: SuiteConfig,
+    target?: TargetType,
   ): Record<string, unknown>;
 
   /**

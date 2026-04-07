@@ -166,7 +166,7 @@ describe('runBuildContext()', () => {
     const plugin: PersonaBuildPlugin = { name: 'arg-check', onBuildContext };
     const ctx = { x: 1 };
     runBuildContext([plugin], ctx, persona, suite);
-    expect(onBuildContext).toHaveBeenCalledWith(ctx, persona, suite);
+    expect(onBuildContext).toHaveBeenCalledWith(ctx, persona, suite, undefined);
   });
 
   // 3-plugin scenario: each plugin receives previous output
