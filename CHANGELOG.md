@@ -3,25 +3,11 @@
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
 ## v2.2.0 - Deep-Agents Target & Target Variable Bugfix
-- Targets: Added extensible `TargetRegistry` class for registering custom build targets.
-- Targets: Added built-in `deep-agents` target with `DEFAULT_FRONTMATTER_DEEP_AGENTS` template.
-- Targets: Added `TARGET_VSCODE`, `TARGET_CLAUDE_CODE`, `TARGET_DEEP_AGENTS` name constants.
-- Targets: Added `defaultRegistry` singleton pre-populated with all three built-in targets.
-- Targets: Exported `TargetDefinition` interface and `TargetRegistry` from the package root.
-- Builder: `BuildConfig.targets` widened to `string[]` to accept any registered target name.
-- Builder: `BuildConfig.frontmatter` widened to `Record<string, string>` for custom targets.
-- Builder: Added optional `BuildConfig.targetRegistry` for supplying a custom target registry.
-- Builder: Added `da_file_name`, `da_file_name_noext` computed context fields for deep-agents.
-- Builder: Injects `target_deep_agents` boolean flag when building the deep-agents target.
+- Targets: Added extensible target registry with `deep-agents` as a third built-in target.
+- Builder: Added `da_*` computed context fields and `target_deep_agents` flag.
 - Builder: Fixed target type variables being ignored.
-- Docs: Updated `metadata-reference.md` with `da_*` computed context fields.
-- Docs: Updated `configuration.md` with `targetRegistry` config option and three-target usage.
-- Docs: Updated `api-surface.md` with new target exports and widened `BuildConfig` types.
-- Tests: Added `da-computed-fields.test.ts` (7 tests covering all `da_*` computed fields).
-- Tests: Added `target-registry.test.ts` covering registry registration and metadata.
-- Tests: Added deep-agents build tests (output dir, filename, frontmatter, flag injection).
-- Tests: Added three-target integration test (vscode + claude-code + deep-agents).
-- Tests: Added `target_deep_agents` injection tests to `target-variable-injection.test.ts`.
+- Tests: Added registry, deep-agents build, and three-target integration tests.
+- Docs: Updated metadata reference, configuration, and API surface for new target support.
 
 ## v2.1.2 - Documentation Update
 - Docs: Removed stale ledger plugin references.
