@@ -2,7 +2,7 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
-## v2.1.3 - Deep-Agents Target & Target Variable Bugfix
+## v2.2.0 - Deep-Agents Target & Target Variable Bugfix
 - Targets: Added extensible `TargetRegistry` class for registering custom build targets.
 - Targets: Added built-in `deep-agents` target with `DEFAULT_FRONTMATTER_DEEP_AGENTS` template.
 - Targets: Added `TARGET_VSCODE`, `TARGET_CLAUDE_CODE`, `TARGET_DEEP_AGENTS` name constants.
