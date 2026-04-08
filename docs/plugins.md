@@ -67,8 +67,10 @@ const summary = await build({
   suites: {
     docs: {
       srcDir: './personas/docs',
-      outVscode: './dist/vscode',
-      outClaudeCode: './dist/cc',
+      outputDirs: {
+        vscode: './dist/vscode',
+        'claude-code': './dist/cc',
+      },
     },
   },
   plugins: [timestampPlugin],

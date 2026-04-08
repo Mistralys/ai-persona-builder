@@ -16,11 +16,19 @@
 // ---------------------------------------------------------------------------
 
 /**
- * The two output formats supported by the build pipeline.
- * 'vscode'      → VS Code `.code-workspace` instruction files
- * 'claude-code' → Claude Code instruction files
+ * Identifies a build output target.
+ *
+ * Resolves to `string` to allow custom targets alongside the three built-in
+ * well-known values:
+ *   - `'vscode'`       → VS Code `.prompt.md` / `.agent.md` instruction files
+ *   - `'claude-code'`  → Claude Code `.md` instruction files
+ *   - `'deep-agents'`  → Deep Agents `.md` instruction files
+ *
+ * Use the exported constants `TARGET_VSCODE`, `TARGET_CLAUDE_CODE`, and
+ * `TARGET_DEEP_AGENTS` from `src/targets/types.ts` for type-safe references
+ * to the built-in targets.
  */
-export type TargetType = 'vscode' | 'claude-code';
+export type TargetType = string;
 
 // ---------------------------------------------------------------------------
 // Metadata / configuration types
@@ -54,10 +62,50 @@ export interface PersonaMetadata {
 export interface SuiteConfig {
   /** Absolute or relative path to the suite source directory */
   srcDir: string;
-  /** Output path for VS Code formatted persona files */
-  outVscode: string;
-  /** Output path for Claude Code formatted persona files */
-  outClaudeCode: string;
+  /**
+   * Output path for VS Code formatted persona files.
+   *
+   * @deprecated Use `outputDirs['vscode']` instead. Kept for backwards
+   *   compatibility. When `outputDirs['vscode']` is present it takes
+   *   precedence. Will be removed in a future major version.
+   */
+  outVscode?: string;
+  /**
+   * Output path for Claude Code formatted persona files.
+   *
+   * @deprecated Use `outputDirs['claude-code']` instead. Kept for backwards
+   *   compatibility. When `outputDirs['claude-code']` is present it takes
+   *   precedence. Will be removed in a future major version.
+   */
+  outClaudeCode?: string;
+  /**
+   * Generic map of output directories keyed by target output-dir key.
+   *
+   * Takes precedence over the deprecated `outVscode` / `outClaudeCode` fields.
+   * Required for custom targets beyond the built-in ones. Each key must match
+   * the target's `outputDirKey` field (declared in its `TargetDefinition`),
+   * **not** necessarily the target name.
+   *
+   * For the three built-in targets `outputDirKey` equals the target name, so
+   * there is no difference in practice:
+   *   - `'vscode'` → `TargetDefinition.outputDirKey === 'vscode'`
+   *   - `'claude-code'` → `TargetDefinition.outputDirKey === 'claude-code'`
+   *   - `'deep-agents'` → `TargetDefinition.outputDirKey === 'deep-agents'`
+   *
+   * For a custom target where `name: 'my-target'` and
+   * `outputDirKey: 'mydir'`, the map key must be `'mydir'`:
+   *
+   * @example
+   * ```ts
+   * outputDirs: {
+   *   'vscode':      './out/vs-code',
+   *   'claude-code': './out/claude-code',
+   *   'deep-agents': './out/deep-agents',
+   *   'mydir':       './out/my-target',  // outputDirKey for a custom target
+   * }
+   * ```
+   */
+  outputDirs?: Record<string, string>;
   /**
    * Optional persona mode string (e.g. 'ledger').
    * When present, plugins can use this to branch behaviour.

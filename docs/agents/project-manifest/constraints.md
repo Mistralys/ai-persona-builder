@@ -92,7 +92,15 @@ The default Claude Code frontmatter template references these three context vari
 
 The loaders (`loadPartials`, `discoverPersonaYamls`, `loadContent`) pass caller-supplied paths directly to `fs/promises` APIs. This is acceptable for a build-time library with developer-controlled paths. If any future layer exposes these functions to CLI arguments, plugin-provided paths, or HTTP input, a `path.resolve(input).startsWith(allowedRoot)` containment guard must be added before that exposure.
 
-### 5. Ledger Plugin Removed in v2.0.0
+### 5. Target Registry Extensibility
+
+`buildContext()` spreads `contextFlags` from the registry definition via `registry.get(target).contextFlags ?? {}`, injecting all declared flags into the template context. For all three built-in targets the `contextFlags` entry is `{ target_<name>: true }` (with hyphens converted to underscores) — e.g. `target_deep_agents: true`. Custom targets registered with their own `contextFlags` map will have those entries injected automatically.
+
+`resolveFrontmatterTemplate()` resolves the frontmatter template via the precedence chain: plugin `frontmatterTemplates` → `BuildConfig.frontmatter` → `registry.get(target).defaultFrontmatter` → library default (`DEFAULT_FRONTMATTER_CLAUDE_CODE`). Custom targets that provide a `defaultFrontmatter` in their `TargetDefinition` do not need to supply a plugin or config override.
+
+**Two-registry limitation:** `buildPersona()` and `buildSuite()` accept an optional `registry` parameter that defaults to `defaultRegistry`. If a consumer passes a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and calls these functions directly without the registry argument, their custom targets will not be visible. Pass the same registry instance explicitly to avoid this, or call `build()` to have it forwarded automatically.
+
+### 6. Ledger Plugin Removed in v2.0.0
 
 The `@mistralys/persona-builder/plugins/ledger` sub-path export was removed in v2.0.0 and
 has been migrated to the `ai-insights` workspace as a local CommonJS module at

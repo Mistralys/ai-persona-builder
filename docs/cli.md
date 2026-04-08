@@ -27,8 +27,10 @@ export default {
   suites: {
     'my-suite': {
       srcDir: path.join(__dirname, 'personas/my-suite'),
-      outVscode: path.join(__dirname, 'dist/vscode'),
-      outClaudeCode: path.join(__dirname, 'dist/claude-code'),
+      outputDirs: {
+        vscode: path.join(__dirname, 'dist/vscode'),
+        'claude-code': path.join(__dirname, 'dist/claude-code'),
+      },
     },
   },
   sharedPartialsDir: path.join(__dirname, 'personas/shared/partials'),

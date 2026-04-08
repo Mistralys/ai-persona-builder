@@ -167,8 +167,10 @@ export default {
   suites: {
     'my-suite': {
       srcDir: path.join(__dirname, 'personas/my-suite'),
-      outVscode: path.join(__dirname, 'dist/vscode'),
-      outClaudeCode: path.join(__dirname, 'dist/claude-code'),
+      outputDirs: {
+        vscode: path.join(__dirname, 'dist/vscode'),
+        'claude-code': path.join(__dirname, 'dist/claude-code'),
+      },
     },
   },
   sharedPartialsDir: path.join(__dirname, 'personas/shared/partials'),
@@ -178,6 +180,8 @@ export default {
 > **CJS alternative:** If your project uses CommonJS, rename the file to
 > `persona-build.config.cjs` and replace `import`/`export default` with
 > `const path = require('path')` and `module.exports = { … }`.
+
+> **Note:** The deprecated `outVscode`/`outClaudeCode` fields still work for backward compatibility but will be removed in a future major version. Prefer `outputDirs`.
 
 ---
 

@@ -12,6 +12,7 @@ export * from './plugins/index.js';
 export * from './builders/index.js';
 export * from './validators/index.js';
 export * from './utils/index.js';
+export * from './targets/index.js';
 
 /** Package version — sourced from package.json (single source of truth). */
 const _pkgRequire = createRequire(import.meta.url);

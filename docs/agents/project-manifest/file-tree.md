@@ -39,6 +39,12 @@
 │   │   ├── frontmatter.ts          # Default frontmatter templates + resolution + rendering
 │   │   └── persona-builder.ts      # build(), buildSuite(), buildPersona() orchestrators
 │   │
+│   ├── targets/                    # Target registry and built-in target definitions
+│   │   ├── index.ts                # Barrel re-export
+│   │   ├── types.ts                # TargetDefinition interface + TARGET_* + DEFAULT_FRONTMATTER_* constants
+│   │   ├── registry.ts             # TargetRegistry class
+│   │   └── built-in.ts             # defaultRegistry singleton (vscode, claude-code, and deep-agents targets)
+│   │
 │   ├── validators/                 # Validation functions
 │   │   ├── index.ts                # Barrel re-export
 │   │   ├── filename-validator.ts   # Kebab-case filename validation
@@ -62,6 +68,8 @@
 │   │   └── content-loader.test.ts
 │   ├── plugins/                    # Plugin system tests (27 tests)
 │   │   └── plugin-runner.test.ts
+│   ├── targets/                    # Target registry tests (29 tests)
+│   │   └── target-registry.test.ts
 │   ├── builders/                   # Builder tests (40 tests)
 │   │   ├── agent-name-map.test.ts
 │   │   ├── persona-builder.test.ts

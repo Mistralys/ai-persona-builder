@@ -6,7 +6,8 @@ Define your personas once as simple YAML + Markdown sources, and the library gen
 
 ## ✨ Features
 
-- **Dual-target output** — generates both `.agent.md` (VS Code) and `.md` (Claude Code) from a single source
+- **Multi-target output** — generates VS Code `.agent.md`, Claude Code `.md`, Deep Agents `.md`, and any custom format from a single source
+- **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, and context flags
 - **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, and `{{#if}}` conditionals
 - **Shared + per-suite partials** — reuse content fragments across personas with local overrides
 - **Plugin architecture** — hook into context building, post-rendering, validation, and frontmatter generation
@@ -34,8 +35,10 @@ const summary = await build({
   suites: {
     'my-suite': {
       srcDir: path.resolve('./personas/my-suite'),
-      outVscode: path.resolve('./dist/vscode'),
-      outClaudeCode: path.resolve('./dist/claude-code'),
+      outputDirs: {
+        vscode: path.resolve('./dist/vscode'),
+        'claude-code': path.resolve('./dist/claude-code'),
+      },
     },
   },
   sharedPartialsDir: path.resolve('./personas/shared/partials'),

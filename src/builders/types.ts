@@ -13,6 +13,7 @@
  */
 
 import type { PersonaBuildPlugin, SuiteConfig, ValidationResult } from '../plugins/types.js';
+import type { TargetRegistry } from '../targets/registry.js';
 
 // ---------------------------------------------------------------------------
 // Build configuration
@@ -51,10 +52,25 @@ export interface BuildConfig {
   plugins?: PersonaBuildPlugin[];
 
   /**
-   * Target output formats to build. Defaults to both `'vscode'` and
-   * `'claude-code'` when omitted.
+   * Target output formats to build.
+   *
+   * Default behaviour depends on whether `targetRegistry` is provided:
+   * - **No custom registry** (default): builds `['vscode', 'claude-code']` to
+   *   preserve backward compatibility — suites that do not configure a
+   *   `'deep-agents'` output directory would otherwise fail silently.
+   * - **Custom registry supplied**: builds all targets registered in that
+   *   registry (equivalent to `registry.names()`).
+   *
+   * Pass an explicit array to override either default:
+   * ```ts
+   * targets: ['vscode', 'claude-code', 'deep-agents']
+   * ```
+   *
+   * Accepts any registered target name — all three built-in targets
+   * (`'vscode'`, `'claude-code'`, `'deep-agents'`) and any custom target
+   * added via `targetRegistry`.
    */
-  targets?: Array<'vscode' | 'claude-code'>;
+  targets?: string[];
 
   /**
    * When `true`, no files are written to disk. The build still renders all
@@ -71,12 +87,25 @@ export interface BuildConfig {
   strict?: boolean;
 
   /**
-   * Optional map of default frontmatter templates, keyed by target type.
+   * Optional map of default frontmatter templates, keyed by target name.
    * These are used as library defaults and can be overridden by plugin
-   * `frontmatterTemplates`. When absent, built-in defaults from
-   * `src/builders/frontmatter.ts` are used.
+   * `frontmatterTemplates`. When absent, built-in defaults from the
+   * `TargetDefinition.defaultFrontmatter` are used.
    */
-  frontmatter?: Partial<Record<'vscode' | 'claude-code', string>>;
+  frontmatter?: Record<string, string>;
+
+  /**
+   * Optional target registry to use for this build.
+   *
+   * When provided, overrides the built-in `defaultRegistry` for output
+   * directory resolution, filename key lookup, frontmatter defaults, and
+   * context flag injection. Consumers can register custom targets on the
+   * provided registry to extend the build system without touching source code.
+   *
+   * Defaults to `defaultRegistry` (pre-registered with `'vscode'`,
+   * `'claude-code'`, and `'deep-agents'`) when not supplied.
+   */
+  targetRegistry?: TargetRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +118,8 @@ export interface BuildConfig {
 export interface BuildResult {
   /** The suite identifier this persona belongs to */
   suite: string;
-  /** Target platform this result was generated for */
-  target: 'vscode' | 'claude-code';
+  /** Target name this result was generated for (e.g. `'vscode'`, `'claude-code'`, or a custom target) */
+  target: string;
   /** Absolute path to the persona YAML source file */
   personaYamlPath: string;
   /** Absolute path to the output file (may not exist if check mode) */

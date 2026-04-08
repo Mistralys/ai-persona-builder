@@ -30,8 +30,9 @@ omitting them causes the engine to fall back to the content file's basename.
 |-------|------|----------|-------------|
 | `vs_file_name` | `string` | Content file basename (e.g. `my-persona.agent.md`) | Filename used for the VS Code output file |
 | `cc_file_name` | `string` | Content file basename (e.g. `my-persona.md`) | Filename used for the Claude Code output file |
+| `da_file_name` | `string` | Content file basename | Filename used for the Deep Agents output file. When absent, no `da_*` derived fields are injected into the template context. |
 
-> **Tip:** Set both fields explicitly so output filenames stay stable if you rename the
+> **Tip:** Set all three fields explicitly so output filenames stay stable if you rename the
 > content source file.
 
 ---
@@ -61,7 +62,13 @@ references them.
 | Field | Type | Fallback | Description |
 |-------|------|----------|-------------|
 | `cc_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Claude Code target. Exposed as `{{cc_tools_list}}` and `{{cc_tools_json}}` in the template context. Useful when the Claude Code persona needs a different toolset from the VS Code persona. |
+---
 
+## Tier 4b — Deep Agents Tool Override
+
+| Field | Type | Fallback | Description |
+|-------|------|----------|-----------|
+| `da_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Deep Agents target. Only consumed when `da_file_name` is also set. Exposed as `{{da_tools_list}}` and `{{da_tools_json}}` in the template context. |
 ---
 
 ## Tier 5 — Optional / Convention Fields
@@ -125,6 +132,9 @@ They are available in all templates but do **not** need to appear in YAML.
 | `{{cc_tools_list}}` | `cc_tools` → fallback to `tools` | Same format as `tools_list`, for Claude Code target |
 | `{{cc_tools_json}}` | `cc_tools` → fallback to `tools` | Same format as `tools_json`, for Claude Code target |
 | `{{cc_file_name_stem}}` | `cc_file_name` (strips `.md`) | Used in the default Claude Code frontmatter `name` field |
+| `{{da_file_name_stem}}` | `da_file_name` (strips `.md`) | Only present when `da_file_name` is set; used in the default Deep Agents frontmatter `name` field |
+| `{{da_tools_list}}` | `da_tools` → fallback to `tools` | Only present when `da_file_name` is set; same format as `tools_list`, for Deep Agents target |
+| `{{da_tools_json}}` | `da_tools` → fallback to `tools` | Only present when `da_file_name` is set; same format as `tools_json`, for Deep Agents target |
 | `{{agent_<slug>}}` | All personas across all suites | Cross-suite reference: `"<name> v<version>"`. Key uses slug with hyphens replaced by underscores. |
 
 See [Template Syntax](template-syntax.md) for how to use these variables, partials, and
