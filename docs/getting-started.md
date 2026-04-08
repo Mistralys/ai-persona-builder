@@ -85,7 +85,7 @@ Every persona in the suite inherits these values unless a per-persona file overr
 The `cc_*` fields are required by the default Claude Code frontmatter template. Set them
 here once so every persona in the suite picks them up automatically.
 
-See [Metadata Reference → Shared Defaults](metadata-reference.md#shared-defaults----meta_sharedyaml)
+See [Metadata Reference → Shared Defaults](metadata-reference.md#shared-defaults--meta_sharedyaml)
 for the full list of recognized `_shared.yaml` fields.
 
 ---

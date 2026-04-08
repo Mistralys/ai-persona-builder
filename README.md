@@ -78,6 +78,7 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Configuration Reference](docs/configuration.md) | `BuildConfig`, `SuiteConfig`, and `BuildSummary` fields |
 | [CLI Reference](docs/cli.md) | Command-line flags, config file format, and common patterns |
 | [Public API](docs/api.md) | All exported types and functions |
+| [Project Manifest](docs/agents/project-manifest/README.md) | Canonical documentation for AI agent sessions |
 
 ## 🔌 Plugins
 

@@ -6,12 +6,12 @@
 
 ## Project Overview
 
-`@mistralys/persona-builder` is a standalone TypeScript library that builds AI persona documents from YAML metadata and Markdown content templates. It targets two output formats — VS Code Chat instruction files (`.agent.md`) and Claude Code instruction files (`.md`) — using a plugin-extensible pipeline.
+`@mistralys/persona-builder` is a standalone TypeScript library that builds AI persona documents from YAML metadata and Markdown content templates. It ships with three built-in output targets — VS Code Chat (`.agent.md`), Claude Code (`.md`), and Deep Agents (`.md`) — and supports custom targets via `TargetRegistry`, all driven by a plugin-extensible pipeline.
 
 | Property | Value |
 |----------|-------|
 | **Package** | `@mistralys/persona-builder` |
-| **Version** | 2.1.0 |
+| **Version** | 2.1.3 |
 | **Language** | TypeScript 5.8 (ES2022 target) |
 | **Runtime** | Node.js ≥ 18.17 (ESM) |
 | **Build Tool** | tsup (dual CJS + ESM output) |

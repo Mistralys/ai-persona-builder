@@ -133,3 +133,7 @@ cc_memory: project
 ```
 
 The VS Code default template only requires `name`, `description`, and `tools` (or `tools_list`) — all standard fields already present in well-formed persona YAML.
+
+---
+
+See [Getting Started](getting-started.md) for a hands-on tutorial that demonstrates these features end-to-end.
