@@ -421,3 +421,145 @@ describe('cross-suite agent name map', () => {
     expect(consumerResult!.content).not.toContain('Helper v2.0.0');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Slug keys (agent_slug_*)
+// ---------------------------------------------------------------------------
+
+describe('agent_slug_* keys', () => {
+  it('emits agent_slug_<underscored_slug> alongside agent_<underscored_slug>', async () => {
+    const base = makeTempDir();
+
+    const suiteA = await createSuite(base, 'suite-a', {
+      personas: [
+        {
+          filename: 'consumer.yaml',
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          content: '# {{name}}\n\nInvoke {{agent_slug_helper}} subagent.\n',
+        },
+      ],
+    });
+
+    const suiteB = await createSuite(base, 'suite-b', {
+      personas: [
+        {
+          filename: 'helper.yaml',
+          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nversion: '2.0.0'\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+          content: '# {{name}}\n',
+        },
+      ],
+    });
+
+    const config: BuildConfig = {
+      suites: {
+        'suite-a': {
+          srcDir: suiteA.srcDir,
+          outVscode: suiteA.outVscode,
+          outClaudeCode: suiteA.outClaudeCode,
+        },
+        'suite-b': {
+          srcDir: suiteB.srcDir,
+          outVscode: suiteB.outVscode,
+          outClaudeCode: suiteB.outClaudeCode,
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+    };
+
+    const summary = await build(config);
+    expect(summary.success).toBe(true);
+
+    const consumerResult = summary.results.find((r) => r.suite === 'suite-a');
+    expect(consumerResult).toBeDefined();
+    // Slug key resolves to the raw slug string (no version suffix)
+    expect(consumerResult!.content).toContain('Invoke helper subagent.');
+    expect(consumerResult!.content).not.toContain('{{agent_slug_helper}}');
+  });
+
+  it('slug key value preserves hyphens for hyphenated persona slugs', async () => {
+    const base = makeTempDir();
+
+    const suiteA = await createSuite(base, 'suite-a', {
+      personas: [
+        {
+          filename: 'consumer.yaml',
+          yaml: "slug: consumer\nname: Consumer\ndescription: Test persona\nvs_file_name: consumer.agent.md\ncc_file_name: consumer.md\n",
+          content: '# {{name}}\n\nSubagent: {{agent_slug_my_great_agent}}\n',
+        },
+      ],
+    });
+
+    const suiteB = await createSuite(base, 'suite-b', {
+      personas: [
+        {
+          filename: 'my-great-agent.yaml',
+          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nversion: '3.0.0'\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
+          content: '# {{name}}\n',
+        },
+      ],
+    });
+
+    const config: BuildConfig = {
+      suites: {
+        'suite-a': {
+          srcDir: suiteA.srcDir,
+          outVscode: suiteA.outVscode,
+          outClaudeCode: suiteA.outClaudeCode,
+        },
+        'suite-b': {
+          srcDir: suiteB.srcDir,
+          outVscode: suiteB.outVscode,
+          outClaudeCode: suiteB.outClaudeCode,
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+    };
+
+    const summary = await build(config);
+    const consumerResult = summary.results.find((r) => r.suite === 'suite-a');
+    // Value preserves the raw hyphenated slug
+    expect(consumerResult!.content).toContain('Subagent: my-great-agent');
+    // Display-name key is unaffected and still resolves to the versioned name
+    expect(consumerResult!.content).not.toContain('My Great Agent');
+  });
+
+  it('display-name key (agent_*) and slug key (agent_slug_*) coexist for the same persona', async () => {
+    const base = makeTempDir();
+
+    const suite = await createSuite(base, 'single', {
+      personas: [
+        {
+          filename: 'alpha.yaml',
+          yaml: "slug: alpha\nname: Alpha Agent\ndescription: Test persona\nvs_file_name: alpha.agent.md\ncc_file_name: alpha.md\n",
+          content: '# {{name}}\n\nDisplay: {{agent_beta}}\nSlug: {{agent_slug_beta}}\n',
+        },
+        {
+          filename: 'beta.yaml',
+          yaml: "slug: beta\nname: Beta Agent\ndescription: Test persona\nversion: '5.0.0'\nvs_file_name: beta.agent.md\ncc_file_name: beta.md\n",
+          content: '# {{name}}\n',
+        },
+      ],
+    });
+
+    const config: BuildConfig = {
+      suites: {
+        single: {
+          srcDir: suite.srcDir,
+          outVscode: suite.outVscode,
+          outClaudeCode: suite.outClaudeCode,
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+    };
+
+    const summary = await build(config);
+    const alphaResult = summary.results.find(
+      (r) => path.basename(r.outputPath) === 'alpha.agent.md',
+    );
+    expect(alphaResult!.content).toContain('Display: Beta Agent v5.0.0');
+    expect(alphaResult!.content).toContain('Slug: beta');
+  });
+});

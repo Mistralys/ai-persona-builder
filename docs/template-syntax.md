@@ -28,6 +28,26 @@ Fallback content.
 {{/if}}
 ```
 
+### Nested Conditionals
+
+`{{#if}}` blocks may be nested inside `{{else}}` branches. This is the standard pattern
+for writing content that differs across all three built-in targets:
+
+```
+{{#if target_vscode}}
+Content shown only in VS Code builds.
+{{else}}
+{{#if target_deep_agents}}
+Content shown only in Deep Agents builds.
+{{else}}
+Content shown in Claude Code (or any remaining) builds.
+{{/if}}
+{{/if}}
+```
+
+The engine resolves nested blocks innermost-first across multiple passes until the output
+stabilises. No stray `{{/if}}` markers appear in the output regardless of nesting depth.
+
 ## Built-in Context Variables
 
 The builder automatically derives several convenience variables from YAML metadata:
@@ -40,25 +60,30 @@ The builder automatically derives several convenience variables from YAML metada
 | `{{cc_tools_list}}` | Comma-separated string of `cc_tools` (falls back to `tools`) |
 | `{{cc_tools_json}}` | JSON array string of `cc_tools` |
 | `{{cc_file_name_stem}}` | Stem of `cc_file_name` (filename without `.md` extension) |
+| `{{da_tools_list}}` | Comma-separated string of `da_tools` (falls back to `tools`); only present when `da_file_name` is set |
+| `{{da_tools_json}}` | JSON array string of `da_tools`; only present when `da_file_name` is set |
+| `{{da_file_name_stem}}` | Stem of `da_file_name` (filename without `.md` extension); only present when `da_file_name` is set |
 | `{{target_vscode}}` | `true` when building for the `vscode` target; absent otherwise |
 | `{{target_claude_code}}` | `true` when building for the `claude-code` target; absent otherwise |
+| `{{target_deep_agents}}` | `true` when building for the `deep-agents` target; absent otherwise |
 
 ### Target Flags
 
 The `target_<name>` variables enable target-conditional content directly in templates.
-Only the active target's flag is injected (`true`); the other target's flag is absent
+Only the active target's flag is injected (`true`); all other targets' flags are absent
 and therefore falsy in conditionals.
 
 ```
 {{#if target_vscode}}
 Content shown only in VS Code builds.
 {{else}}
-Content shown in all other builds (e.g. Claude Code).
+Content shown in all other builds (e.g. Claude Code, Deep Agents, or custom targets).
 {{/if}}
 ```
 
 The flag name is derived from the target identifier by replacing hyphens with
-underscores: `vscode` → `target_vscode`, `claude-code` → `target_claude_code`.
+underscores: `vscode` → `target_vscode`, `claude-code` → `target_claude_code`,
+`deep-agents` → `target_deep_agents`. The same rule applies to custom targets.
 
 ## Default Frontmatter Templates
 
@@ -108,3 +133,7 @@ cc_memory: project
 ```
 
 The VS Code default template only requires `name`, `description`, and `tools` (or `tools_list`) — all standard fields already present in well-formed persona YAML.
+
+---
+
+See [Getting Started](getting-started.md) for a hands-on tutorial that demonstrates these features end-to-end.

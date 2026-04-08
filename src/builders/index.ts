@@ -10,6 +10,7 @@ export type { BuildConfig, BuildResult, BuildSummary } from './types.js';
 export {
   DEFAULT_FRONTMATTER_VSCODE,
   DEFAULT_FRONTMATTER_CLAUDE_CODE,
+  DEFAULT_FRONTMATTER_DEEP_AGENTS,
   resolveFrontmatterTemplate,
   renderFrontmatter,
 } from './frontmatter.js';

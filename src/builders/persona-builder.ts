@@ -45,6 +45,9 @@ import {
 import { resolveFrontmatterTemplate, renderFrontmatter } from './frontmatter.js';
 import type { BuildConfig, BuildResult, BuildSummary } from './types.js';
 import type { PersonaBuildPlugin, PersonaMetadata, SuiteConfig, TargetType, ValidationResult } from '../plugins/types.js';
+import { defaultRegistry } from '../targets/built-in.js';
+import type { TargetDefinition } from '../targets/types.js';
+import type { TargetRegistry } from '../targets/registry.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -114,6 +117,49 @@ async function loadPersonaYaml(yamlPath: string): Promise<Record<string, unknown
 }
 
 /**
+ * Resolve the output directory for a given target from a suite configuration.
+ *
+ * Resolution order (first match wins):
+ *   1. `suiteConfig.outputDirs[definition.outputDirKey]` — generic map, takes precedence.
+ *   2. `suiteConfig.outVscode` — deprecated fallback for the built-in 'vscode' key.
+ *   3. `suiteConfig.outClaudeCode` — deprecated fallback for the built-in 'claude-code' key.
+ *
+ * The lookup key is `definition.outputDirKey` when a registry definition is
+ * provided, falling back to the raw `target` name for unregistered targets
+ * (where `outputDirKey` equals the name by convention).
+ *
+ * @param target      The build target name.
+ * @param suiteConfig The suite configuration to resolve from.
+ * @param definition  Optional registry definition for the target. When present,
+ *                    `definition.outputDirKey` is used as the output dir map key.
+ * @returns           Resolved output directory path.
+ * @throws {Error}    When no output directory is configured for the target.
+ */
+function resolveOutputDir(
+  target: string,
+  suiteConfig: SuiteConfig,
+  definition?: TargetDefinition,
+): string {
+  // Build a merged map: deprecated named fields provide the base, outputDirs overrides.
+  const merged: Record<string, string> = {};
+  if (suiteConfig.outVscode) merged['vscode'] = suiteConfig.outVscode;
+  if (suiteConfig.outClaudeCode) merged['claude-code'] = suiteConfig.outClaudeCode;
+  if (suiteConfig.outputDirs) Object.assign(merged, suiteConfig.outputDirs);
+
+  // Use outputDirKey from the registry definition when available, falling back
+  // to the target name for unregistered targets where outputDirKey === name.
+  const lookupKey = definition?.outputDirKey ?? target;
+  const dir = merged[lookupKey];
+  if (dir) return dir;
+
+  throw new Error(
+    `buildPersona: no output directory configured for target "${target}". ` +
+      `Add outputDirs['${lookupKey}'] to the suite config, or, for the built-in ` +
+      `targets, provide the outVscode / outClaudeCode fields.`,
+  );
+}
+
+/**
  * Pre-scan all suites and build a cross-suite agent name map.
  *
  * For each persona across all configured suites, creates a context variable:
@@ -161,8 +207,12 @@ async function buildAgentNameMap(
           ? persona['version']
           : defaultVersion;
 
-      const key = `agent_${slug.replace(/-/g, '_')}`;
+      const underscoredSlug = slug.replace(/-/g, '_');
+      const key = `agent_${underscoredSlug}`;
       agentMap[key] = `${name} v${version}`;
+
+      const slugKey = `agent_slug_${underscoredSlug}`;
+      agentMap[slugKey] = slug;
     }
   }
 
@@ -188,6 +238,7 @@ function buildContext(
   sharedMeta: Record<string, unknown>,
   agentMap: Record<string, string> = {},
   target?: TargetType,
+  registry?: TargetRegistry,
 ): Record<string, unknown> {
   const version =
     typeof personaMeta['version'] === 'string'
@@ -228,6 +279,25 @@ function buildContext(
     merged['cc_file_name_stem'] = ccFileName.replace(/\.md$/, '');
   }
 
+  // da_file_name_stem — stem of da_file_name (for deep-agents output)
+  if (!('da_file_name_stem' in merged) && typeof merged['da_file_name'] === 'string') {
+    const daFileName = merged['da_file_name'] as string;
+    merged['da_file_name_stem'] = daFileName.replace(/\.md$/, '');
+  }
+
+  // da_tools_list / da_tools_json — from `da_tools` or fall back to `tools`
+  // Intentionally gated on da_file_name: unlike cc_tools_list/cc_tools_json (always emitted for
+  // every persona), da_* fields are absent when the persona has no deep-agents output file (AC-4).
+  if (typeof merged['da_file_name'] === 'string') {
+    const daTools = Array.isArray(merged['da_tools']) ? (merged['da_tools'] as string[]) : tools;
+    if (!('da_tools_list' in merged)) {
+      merged['da_tools_list'] = serializeToolsList(daTools);
+    }
+    if (!('da_tools_json' in merged)) {
+      merged['da_tools_json'] = serializeTools(daTools);
+    }
+  }
+
   // ── Cross-suite agent name variables ──────────────────────────────────────
   for (const [key, value] of Object.entries(agentMap)) {
     if (!(key in merged)) {
@@ -237,7 +307,16 @@ function buildContext(
 
   // ── Target flag injection ─────────────────────────────────────────────────
   if (target !== undefined) {
-    merged[`target_${target.replace(/-/g, '_')}`] = true;
+    if (registry && registry.has(target)) {
+      // Inject all contextFlags declared in the target's registry definition.
+      const flags = registry.get(target).contextFlags ?? {};
+      for (const [key, value] of Object.entries(flags)) {
+        merged[key] = value;
+      }
+    } else {
+      // Fallback for targets not present in the registry.
+      merged[`target_${target.replace(/-/g, '_')}`] = true;
+    }
   }
 
   return merged;
@@ -272,6 +351,14 @@ function buildContext(
  * @param config           Top-level BuildConfig
  * @param plugins          Registered plugins
  * @param target           Target output format
+ * @param agentMap         Pre-built cross-suite agent name map
+ * @param registry         Target registry to use. Defaults to `defaultRegistry`.
+ *   **Two-registry limitation:** If you pass a custom `TargetRegistry` only
+ *   to `build()` (via `config.targetRegistry`) and call `buildPersona()`
+ *   directly without also passing that registry here, your custom targets
+ *   will not be visible — `defaultRegistry` will be used instead. Either
+ *   pass the same registry instance explicitly, or call `build()` to have
+ *   the registry forwarded automatically.
  * @returns                BuildResult for this persona × target combination
  */
 export async function buildPersona(
@@ -282,14 +369,15 @@ export async function buildPersona(
   partialsMap: Record<string, string>,
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
-  target: 'vscode' | 'claude-code',
+  target: string,
   agentMap: Record<string, string> = {},
+  registry: TargetRegistry = defaultRegistry,
 ): Promise<BuildResult> {
   // ── 1. Load persona metadata ──────────────────────────────────────────────
   const personaMeta = await loadPersonaYaml(personaYamlPath);
 
   // ── 2. Build merged context ───────────────────────────────────────────────
-  let context = buildContext(personaMeta, sharedMeta, agentMap, target);
+  let context = buildContext(personaMeta, sharedMeta, agentMap, target, registry);
 
   // ── 3. Plugin onBuildContext ──────────────────────────────────────────────
   // Cast context to PersonaMetadata for the plugin runner (it requires a
@@ -298,7 +386,7 @@ export async function buildPersona(
   context = runBuildContext(plugins, context, personaMetaTyped, suiteConfig, target);
 
   // ── 4. Render frontmatter ─────────────────────────────────────────────────
-  const fmTemplate = resolveFrontmatterTemplate(target, plugins, config.frontmatter);
+  const fmTemplate = resolveFrontmatterTemplate(target, plugins, config.frontmatter, registry);
   const contentBasename = path.basename(personaYamlPath, '.yaml') + '.md';
   const frontmatter = renderFrontmatter(fmTemplate, context, contentBasename);
 
@@ -325,17 +413,17 @@ export async function buildPersona(
   const validationResults: ValidationResult[] = runValidate(plugins, personaMetaTyped, suiteConfig, target);
 
   // ── 10. Determine output file path ────────────────────────────────────────
-  const outputDir = target === 'vscode' ? suiteConfig.outVscode : suiteConfig.outClaudeCode;
-  // Use declared output filename fields when present (vs_file_name / cc_file_name),
-  // falling back to the content basename.
-  let outputBasename: string;
-  if (target === 'vscode' && typeof context['vs_file_name'] === 'string') {
-    outputBasename = context['vs_file_name'];
-  } else if (target === 'claude-code' && typeof context['cc_file_name'] === 'string') {
-    outputBasename = context['cc_file_name'];
-  } else {
-    outputBasename = contentBasename;
-  }
+  // Resolve the registry definition once — used for both outputDirKey (map
+  // lookup) and filenameContextKey (output filename override).
+  const def = registry.has(target) ? registry.get(target) : undefined;
+  const outputDir = resolveOutputDir(target, suiteConfig, def);
+  // Use the filename context key declared in the target's registry definition,
+  // falling back to the content basename when absent or unset in context.
+  const fnKey = def?.filenameContextKey;
+  const outputBasename =
+    fnKey && typeof context[fnKey] === 'string'
+      ? (context[fnKey] as string)
+      : contentBasename;
   const outputPath = path.join(outputDir, outputBasename);
 
   // ── 11. Write (unless check mode) ─────────────────────────────────────────
@@ -378,6 +466,14 @@ export async function buildPersona(
  * @param config       Top-level BuildConfig
  * @param plugins      Registered plugins
  * @param target       Target output format
+ * @param agentMap     Pre-built cross-suite agent name map
+ * @param registry     Target registry to use. Defaults to `defaultRegistry`.
+ *   **Two-registry limitation:** If you pass a custom `TargetRegistry` only
+ *   to `build()` (via `config.targetRegistry`) and call `buildSuite()`
+ *   directly without also passing that registry here, your custom targets
+ *   will not be visible — `defaultRegistry` will be used instead. Either
+ *   pass the same registry instance explicitly, or call `build()` to have
+ *   the registry forwarded automatically.
  * @returns            Array of BuildResult objects, one per persona
  */
 export async function buildSuite(
@@ -385,8 +481,9 @@ export async function buildSuite(
   suiteConfig: SuiteConfig,
   config: BuildConfig,
   plugins: PersonaBuildPlugin[],
-  target: 'vscode' | 'claude-code',
+  target: string,
   agentMap: Record<string, string> = {},
+  registry: TargetRegistry = defaultRegistry,
 ): Promise<BuildResult[]> {
   // ── 1. Load shared metadata ───────────────────────────────────────────────
   const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
@@ -425,6 +522,7 @@ export async function buildSuite(
       plugins,
       target,
       agentMap,
+      registry,
     );
     results.push(result);
   }
@@ -457,7 +555,13 @@ export async function buildSuite(
  */
 export async function build(config: BuildConfig): Promise<BuildSummary> {
   const plugins = config.plugins ?? [];
-  const targets = config.targets ?? ['vscode', 'claude-code'];
+  const registry = config.targetRegistry ?? defaultRegistry;
+  // When a custom registry is supplied and targets are not explicit, build all
+  // registered targets. When using the default registry without an explicit
+  // targets list, build only targets with defaultEnabled !== false. This
+  // preserves the historical two-target default (vscode + claude-code) for
+  // existing suite configs that do not configure deep-agents output.
+  const targets = config.targets ?? registry.names().filter(n => registry.get(n).defaultEnabled !== false);
   const allResults: BuildResult[] = [];
 
   // Pre-scan: build cross-suite agent name map
@@ -465,7 +569,7 @@ export async function build(config: BuildConfig): Promise<BuildSummary> {
 
   for (const [suiteName, suiteConfig] of Object.entries(config.suites)) {
     for (const target of targets) {
-      const suiteResults = await buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap);
+      const suiteResults = await buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap, registry);
       allResults.push(...suiteResults);
     }
   }

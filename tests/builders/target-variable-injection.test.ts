@@ -1,14 +1,15 @@
 /**
  * tests/builders/target-variable-injection.test.ts
  *
- * Tests for target variable injection (target_vscode, target_claude_code)
- * introduced by the fix for the target conditional bug.
+ * Tests for target variable injection (target_vscode, target_claude_code,
+ * target_deep_agents) introduced by the fix for the target conditional bug.
  *
  * Acceptance Criteria verified:
  *   AC-1: target_vscode is true when building for 'vscode', absent for 'claude-code'
  *   AC-2: target_claude_code is true when building for 'claude-code', absent for 'vscode'
  *   AC-3: {{#if target_vscode}} conditionals resolve correctly per target
  *   AC-4: Plugin onBuildContext receives the active target as its 4th argument
+ *   AC-5 (WP-009): target_deep_agents is true when building for 'deep-agents'
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -315,5 +316,117 @@ describe('plugin onBuildContext receives target — AC-4', () => {
 
     expect(vsResult.content).toContain('Hello VS Code');
     expect(ccResult.content).toContain('Hello Claude Code');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-5 (WP-009): target_deep_agents flag injection
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: create a suite that includes outputDirs['deep-agents'] so
+ * buildPersona() can be called with target='deep-agents'.
+ */
+async function createDeepAgentsSuite(
+  baseDir: string,
+  contentMd: string,
+): Promise<{ personaYamlPath: string; suiteConfig: SuiteConfig; config: BuildConfig }> {
+  const suiteDir = path.join(baseDir, 'suite-da');
+  const outDir = path.join(baseDir, 'out-da');
+
+  await mkdir(path.join(suiteDir, 'meta'), { recursive: true });
+  await mkdir(path.join(suiteDir, 'content'), { recursive: true });
+
+  await writeFile(
+    path.join(suiteDir, 'meta', '_shared.yaml'),
+    `default_version: '1.0.0'\ncc_permission_mode: default\ncc_model: claude-opus-4-5\ncc_memory: project\n`,
+  );
+
+  await writeFile(
+    path.join(suiteDir, 'meta', 'agent.yaml'),
+    [
+      'name: Test Agent',
+      'description: A test agent.',
+      'vs_file_name: agent.agent.md',
+      'cc_file_name: agent.md',
+      'da_file_name: agent-da.md',
+      'tools:',
+      '  - read',
+    ].join('\n') + '\n',
+  );
+
+  await writeFile(path.join(suiteDir, 'content', 'agent.md'), contentMd);
+
+  const suiteConfig: SuiteConfig = {
+    srcDir: suiteDir,
+    outVscode: path.join(outDir, 'vscode'),
+    outClaudeCode: path.join(outDir, 'cc'),
+    outputDirs: { 'deep-agents': path.join(outDir, 'da') },
+  };
+
+  const config: BuildConfig = {
+    suites: { suite: suiteConfig },
+    check: true,
+  };
+
+  return {
+    personaYamlPath: path.join(suiteDir, 'meta', 'agent.yaml'),
+    suiteConfig,
+    config,
+  };
+}
+
+describe('target_deep_agents flag injection — AC-5 (WP-009)', () => {
+  it('injects target_deep_agents=true when building for deep-agents', async () => {
+    const { personaYamlPath, suiteConfig, config } = await createDeepAgentsSuite(
+      testTmpDir,
+      '{{target_deep_agents}}\n',
+    );
+
+    const result = await buildPersona(
+      personaYamlPath, 'suite', suiteConfig, SHARED_META, {}, config, [], 'deep-agents',
+    );
+
+    expect(result.content).toContain('true');
+  });
+
+  it('does not inject target_deep_agents when building for vscode', async () => {
+    const { personaYamlPath, suiteConfig, config } = await createDeepAgentsSuite(
+      testTmpDir,
+      '{{target_deep_agents}}\n',
+    );
+
+    const result = await buildPersona(
+      personaYamlPath, 'suite', suiteConfig, SHARED_META, {}, config, [], 'vscode',
+    );
+
+    expect(result.content).not.toContain('true');
+  });
+
+  it('does not inject target_deep_agents when building for claude-code', async () => {
+    const { personaYamlPath, suiteConfig, config } = await createDeepAgentsSuite(
+      testTmpDir,
+      '{{target_deep_agents}}\n',
+    );
+
+    const result = await buildPersona(
+      personaYamlPath, 'suite', suiteConfig, SHARED_META, {}, config, [], 'claude-code',
+    );
+
+    expect(result.content).not.toContain('true');
+  });
+
+  it('resolves {{#if target_deep_agents}} block when building for deep-agents', async () => {
+    const { personaYamlPath, suiteConfig, config } = await createDeepAgentsSuite(
+      testTmpDir,
+      `{{#if target_deep_agents}}DA content{{else}}Other content{{/if}}\n`,
+    );
+
+    const result = await buildPersona(
+      personaYamlPath, 'suite', suiteConfig, SHARED_META, {}, config, [], 'deep-agents',
+    );
+
+    expect(result.content).toContain('DA content');
+    expect(result.content).not.toContain('Other content');
   });
 });

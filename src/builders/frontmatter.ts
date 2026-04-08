@@ -3,7 +3,7 @@
  *
  * Frontmatter template registry for @mistralys/persona-builder.
  *
- * Ships two minimal default templates — one per target — that work for the
+ * Ships three minimal default templates — one per built-in target — that work for the
  * "standalone" persona mode (simple personas without numbered workflows or
  * MCP server blocks).  Projects needing richer frontmatter register custom
  * templates via the `PersonaBuildPlugin.frontmatterTemplates` property.
@@ -18,36 +18,16 @@
 import { resolveConditionals } from '../engine/conditionals.js';
 import { resolveVariables } from '../engine/variables.js';
 import type { PersonaBuildPlugin } from '../plugins/types.js';
+import type { TargetRegistry } from '../targets/registry.js';
 
-// ---------------------------------------------------------------------------
-// Built-in default templates
-// ---------------------------------------------------------------------------
-
-/**
- * Default VS Code frontmatter template.
- *
- * Minimal fields that work for standalone personas.  Projects using numbered
- * workflows (e.g. ledger) should inject a richer template via a plugin.
- */
-export const DEFAULT_FRONTMATTER_VSCODE = `---
-name: '{{name}} v{{version}}'
-description: '{{description}}'
-tools: [{{tools_list}}]
----`;
-
-/**
- * Default Claude Code frontmatter template.
- *
- * Minimal fields that work for standalone personas.  Projects using numbered
- * workflows should inject a richer template via a plugin.
- */
-export const DEFAULT_FRONTMATTER_CLAUDE_CODE = `---
-name: {{cc_file_name_stem}}
-permissionMode: {{cc_permission_mode}}
-model: {{cc_model}}
-memory: {{cc_memory}}
-allowedTools: [{{cc_tools_list}}]
----`;
+// Default templates are owned by the targets layer; re-exported here so
+// the public API surface (src/builders/index.ts) is unchanged.
+import {
+  DEFAULT_FRONTMATTER_VSCODE,
+  DEFAULT_FRONTMATTER_CLAUDE_CODE,
+  DEFAULT_FRONTMATTER_DEEP_AGENTS,
+} from '../targets/types.js';
+export { DEFAULT_FRONTMATTER_VSCODE, DEFAULT_FRONTMATTER_CLAUDE_CODE, DEFAULT_FRONTMATTER_DEEP_AGENTS };
 
 // ---------------------------------------------------------------------------
 // Template resolution
@@ -57,22 +37,23 @@ allowedTools: [{{cc_tools_list}}]
  * Resolve frontmatter template precedence.
  *
  * Precedence order (highest wins):
- *   1. Plugin `frontmatterTemplates` — the last plugin with a matching key
- *      wins (plugins are applied in reverse-registration order so the
- *      *first* registered plugin with a template takes precedence over later
- *      ones, matching the general plugin-chain contract).
+ *   1. Plugin `frontmatterTemplates` — plugins are checked in registration
+ *      order; the first plugin with a matching key wins.
  *   2. `configTemplates` — templates passed via `BuildConfig.frontmatter`
- *   3. Library defaults (`DEFAULT_FRONTMATTER_VSCODE` / `DEFAULT_FRONTMATTER_CLAUDE_CODE`)
+ *   3. Registry default — `TargetDefinition.defaultFrontmatter` for the target
+ *   4. Library default (`DEFAULT_FRONTMATTER_VSCODE`) — safety fallback only
  *
- * @param target          The build target ('vscode' | 'claude-code')
+ * @param target          The build target name (e.g. `'vscode'`, `'claude-code'`, or a custom target)
  * @param plugins         Registered plugins (searched in order; first match wins)
  * @param configTemplates Optional caller-supplied overrides from BuildConfig
+ * @param registry        Optional TargetRegistry for resolving the built-in default template
  * @returns               The resolved template string
  */
 export function resolveFrontmatterTemplate(
-  target: 'vscode' | 'claude-code',
+  target: string,
   plugins: PersonaBuildPlugin[],
-  configTemplates?: Partial<Record<'vscode' | 'claude-code', string>>,
+  configTemplates?: Record<string, string>,
+  registry?: TargetRegistry,
 ): string {
   // Check plugins in registration order — first plugin with a matching
   // frontmatterTemplates entry wins.
@@ -89,8 +70,13 @@ export function resolveFrontmatterTemplate(
     if (tpl !== undefined) return tpl;
   }
 
-  // Library defaults
-  return target === 'vscode' ? DEFAULT_FRONTMATTER_VSCODE : DEFAULT_FRONTMATTER_CLAUDE_CODE;
+  // Registry default (covers all registered targets, including custom ones)
+  if (registry && registry.has(target)) {
+    return registry.get(target).defaultFrontmatter;
+  }
+
+  // Absolute fallback — should not be reached in normal usage
+  return DEFAULT_FRONTMATTER_VSCODE;
 }
 
 // ---------------------------------------------------------------------------

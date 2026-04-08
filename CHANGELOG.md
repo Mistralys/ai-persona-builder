@@ -2,8 +2,12 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
-## v2.1.3 - Target Variable Bugfix
+## v2.2.0 - Deep-Agents Target & Target Variable Bugfix
+- Targets: Added extensible target registry with `deep-agents` as a third built-in target.
+- Builder: Added `da_*` computed context fields and `target_deep_agents` flag.
 - Builder: Fixed target type variables being ignored.
+- Tests: Added registry, deep-agents build, and three-target integration tests.
+- Docs: Updated metadata reference, configuration, and API surface for new target support.
 
 ## v2.1.2 - Documentation Update
 - Docs: Removed stale ledger plugin references.

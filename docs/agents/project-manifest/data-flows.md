@@ -13,8 +13,8 @@ build(config)
   │     │     ├─ Load _shared.yaml → default_version fallback
   │     │     ├─ Discover persona YAML files
   │     │     └─ For each persona:
-  │     │           key   = "agent_" + slug (hyphens → underscores)
-  │     │           value = "<name> v<version>"
+  │     │           key   = "agent_" + slug (hyphens → underscores)     → "<name> v<version>"
+  │     │           key   = "agent_slug_" + slug (hyphens → underscores) → slug (hyphens preserved)
   │     └─ Return agentMap: Record<string, string>
   │
   ├─ For each suite in config.suites:
@@ -73,17 +73,26 @@ Template variables are resolved from a merged context object. Later values win:
 
 ### Derived Fields (auto-computed)
 
-| Field | Source |
-|-------|--------|
-| `version` | `personaMeta.version` → `sharedMeta.default_version` → `'0.0.0'` |
-| `tools_list` | `serializeToolsList(tools)` |
-| `tools_json` | `serializeTools(tools)` |
-| `cc_tools_list` | `serializeToolsList(cc_tools ?? tools)` |
-| `cc_tools_json` | `serializeTools(cc_tools ?? tools)` |
-| `cc_file_name_stem` | `cc_file_name` with `.md` extension stripped |
-| `agent_<slug>` | `"<name> v<version>"` for every persona across all suites; slug hyphens → underscores |
+| Field | Source | Condition |
+|-------|--------|-----------|
+| `version` | `personaMeta.version` → `sharedMeta.default_version` → `'0.0.0'` | Always |
+| `tools_list` | `serializeToolsList(tools)` | Always |
+| `tools_json` | `serializeTools(tools)` | Always |
+| `cc_tools_list` | `serializeToolsList(cc_tools ?? tools)` | Always |
+| `cc_tools_json` | `serializeTools(cc_tools ?? tools)` | Always |
+| `cc_file_name_stem` | `cc_file_name` with `.md` extension stripped | Always |
+| `da_file_name_stem` | `da_file_name` with `.md` extension stripped | Only when `da_file_name` is set |
+| `da_tools_list` | `serializeToolsList(da_tools ?? tools)` | Only when `da_file_name` is set |
+| `da_tools_json` | `serializeTools(da_tools ?? tools)` | Only when `da_file_name` is set |
+| `agent_<slug>` | `"<name> v<version>"` for every persona across all suites; slug hyphens → underscores in key | Always |
+| `agent_slug_<slug>` | Raw hyphenated slug string for every persona; key uses underscores, value preserves hyphens | Always |
 
 Derived fields are only set when not already present in the merged context — explicit YAML values always win.
+
+> **`da_*` gate:** The `da_file_name_stem`, `da_tools_list`, and `da_tools_json` fields are
+> gated on `da_file_name` being present in the merged context. Personas without `da_file_name`
+> will not have these fields injected (no error, no empty string). This differs from the
+> `cc_*` equivalents which are always emitted unconditionally.
 
 ## 3. Frontmatter Template Precedence
 

@@ -98,6 +98,83 @@ describe('resolveConditionals()', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Nested conditionals (innermost-first resolution)
+  // ---------------------------------------------------------------------------
+
+  it('resolves two-level nesting: outer-falsy → inner-truthy', () => {
+    // {{#if outer}}VS{{else}}{{#if inner}}DA{{else}}CC{{/if}}{{/if}}
+    const text =
+      '{{#if outer}}VS{{else}}{{#if inner}}DA{{else}}CC{{/if}}{{/if}}';
+    const result = resolveConditionals(text, { outer: false, inner: true });
+    expect(result.trim()).toBe('DA');
+  });
+
+  it('resolves two-level nesting: outer-falsy → inner-falsy (else-else)', () => {
+    const text =
+      '{{#if outer}}VS{{else}}{{#if inner}}DA{{else}}CC{{/if}}{{/if}}';
+    const result = resolveConditionals(text, { outer: false, inner: false });
+    expect(result.trim()).toBe('CC');
+  });
+
+  it('resolves two-level nesting: outer-truthy (inner not evaluated)', () => {
+    const text =
+      '{{#if outer}}VS{{else}}{{#if inner}}DA{{else}}CC{{/if}}{{/if}}';
+    const result = resolveConditionals(text, { outer: true, inner: false });
+    expect(result.trim()).toBe('VS');
+  });
+
+  it('resolves nesting with multiline content across all three branches', () => {
+    const text = [
+      '{{#if vscode}}',
+      'run_subagent()',
+      '{{else}}',
+      '{{#if deep_agents}}',
+      'task(subagent)',
+      '{{else}}',
+      'Task tool',
+      '{{/if}}',
+      '{{/if}}',
+    ].join('\n');
+
+    const vscodeResult = resolveConditionals(text, { vscode: true });
+    expect(vscodeResult).toContain('run_subagent()');
+    expect(vscodeResult).not.toContain('task(subagent)');
+    expect(vscodeResult).not.toContain('Task tool');
+
+    const daResult = resolveConditionals(text, { deep_agents: true });
+    expect(daResult).toContain('task(subagent)');
+    expect(daResult).not.toContain('run_subagent()');
+    expect(daResult).not.toContain('Task tool');
+
+    const ccResult = resolveConditionals(text, {});
+    expect(ccResult).toContain('Task tool');
+    expect(ccResult).not.toContain('run_subagent()');
+    expect(ccResult).not.toContain('task(subagent)');
+  });
+
+  it('preserves whitespace symmetry: nested else output equals flat else output', () => {
+    // Nested: {{#if a}}TRUTHY{{else}}{{#if b}}B{{else}}C{{/if}}{{/if}}
+    // Flat:   {{#if a}}TRUTHY{{else}}C{{/if}}
+    // When a=false, b=false → both should return '\nC\n'
+    const nested =
+      '{{#if a}}TRUTHY{{else}}{{#if b}}B{{else}}C{{/if}}{{/if}}';
+    const flat = '{{#if a}}TRUTHY{{else}}C{{/if}}';
+    const nestedResult = resolveConditionals(nested, { a: false, b: false });
+    const flatResult = resolveConditionals(flat, { a: false });
+    expect(nestedResult).toBe(flatResult);
+  });
+
+  it('resolves three-level nesting across all truth-table combinations', () => {
+    const text =
+      '{{#if a}}A{{else}}{{#if b}}B{{else}}{{#if c}}C{{else}}D{{/if}}{{/if}}{{/if}}';
+
+    expect(resolveConditionals(text, { a: true }).trim()).toBe('A');
+    expect(resolveConditionals(text, { a: false, b: true }).trim()).toBe('B');
+    expect(resolveConditionals(text, { a: false, b: false, c: true }).trim()).toBe('C');
+    expect(resolveConditionals(text, { a: false, b: false, c: false }).trim()).toBe('D');
+  });
+
+  // ---------------------------------------------------------------------------
   // Edge cases
   // ---------------------------------------------------------------------------
 
