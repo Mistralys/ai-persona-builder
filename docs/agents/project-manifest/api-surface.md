@@ -138,7 +138,11 @@ export function resolveConditionals(
 ): string;
 ```
 
-Evaluates `{{#if flag}}…{{/if}}` and `{{#if flag}}…{{else}}…{{/if}}` blocks. Nested `{{#if}}` blocks inside `{{else}}` branches are supported — resolved innermost-first across multiple passes until stable. Unknown flags treated as falsy.
+Evaluates `{{#if flag}}…{{/if}}`, `{{#if flag}}…{{else}}…{{/if}}`, and `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` (chain) blocks.
+
+`{{else if}}` chains are pre-processed by `resolveElseIf()` (internal), which rewrites each innermost `{{else if flag}}` segment into an equivalent `{{else}}{{#if flag}}` nested block before the main resolution pass. Multi-level chains are unwound iteratively — one level per pass — until the string stabilises.
+
+Nested `{{#if}}` blocks inside `{{else}}` branches are supported — resolved innermost-first across multiple passes until stable. `{{else if}}` chains may be freely mixed with traditional nested syntax. Unknown flags treated as falsy.
 
 ### `resolveVariables(text, context, filename)`
 

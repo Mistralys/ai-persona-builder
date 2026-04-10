@@ -2,6 +2,13 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.3.0 - Else-If Chain Support
+- Engine: Added `{{else if flag}}` chain syntax; arbitrary depth, first truthy branch wins.
+- Engine: `{{else if}}` composes correctly with existing nested `{{#if}}` syntax.
+- Tests: Added test cases covering all else-if acceptance criteria.
+- Docs: Added else-if chain documentation with truth table to the template syntax guide.
+- Docs: Updated API surface and constraints docs for the new syntax.
+
 ## v2.2.0 - Deep-Agents Target & Target Variable Bugfix
 - Targets: Added extensible target registry with `deep-agents` as a third built-in target.
 - Builder: Added `da_*` computed context fields and `target_deep_agents` flag.

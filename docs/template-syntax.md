@@ -28,6 +28,35 @@ Fallback content.
 {{/if}}
 ```
 
+### Else-If Chains
+
+Use `{{else if flagName}}` to express multi-branch conditionals without deep nesting:
+
+```
+{{#if a}}
+Content shown when a is truthy.
+{{else if b}}
+Content shown when a is falsy and b is truthy.
+{{else}}
+Fallback content when both a and b are falsy.
+{{/if}}
+```
+
+**Truth table:**
+
+| `a` | `b` | Output |
+|-----|-----|--------|
+| `true` | any | first branch |
+| `false` | `true` | second branch |
+| `false` | `false` | `{{else}}` fallback |
+
+Chains may have any number of `{{else if}}` branches. The first truthy branch wins;
+all subsequent branches are discarded. If no branch is truthy and there is no
+`{{else}}`, the entire block is removed from the output.
+
+`{{else if}}` chains are normalised into equivalent nested `{{#if}}` blocks before
+resolution, so they compose correctly with traditional nested syntax.
+
 ### Nested Conditionals
 
 `{{#if}}` blocks may be nested inside `{{else}}` branches. This is the standard pattern

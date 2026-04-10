@@ -2,10 +2,72 @@
  * conditionals.ts
  *
  * Pure template-engine function for resolving conditional blocks.
- * Handles {{#if flag}}…{{/if}} and {{#if flag}}…{{else}}…{{/if}} syntax,
+ * Handles {{#if flag}}…{{/if}}, {{#if flag}}…{{else}}…{{/if}}, and
+ * {{#if flag}}…{{else if flag2}}…{{else}}…{{/if}} (chain) syntax,
  * including nested {{#if}} blocks inside {{else}} branches.
  * No file-system I/O.
  */
+
+/**
+ * Negative-lookahead fragment that matches any character sequence containing
+ * no `{{#if` opener. Used as a shared building-block in the regex patterns of
+ * both `resolveElseIf` and `resolveConditionals` so the two guards stay in sync.
+ * @internal
+ */
+const NO_NESTED_IF = String.raw`(?:(?!\{\{#if\b)[\s\S])*?`;
+
+/**
+ * Matches `{{else if flag}}…{{/if}}` segments whose content contains no
+ * nested `{{#if` opener. Hoisted to module level to avoid constructing a new
+ * `RegExp` object on every `resolveElseIf()` call.
+ * `String.prototype.replace()` resets `lastIndex` to 0 before each call, so
+ * the shared `g`-flag instance is safe for repeated use.
+ * @internal
+ */
+const ELSE_IF_PATTERN = new RegExp(
+  String.raw`\{\{else if (\w+)\}\}(${NO_NESTED_IF})\{\{\/if\}\}`,
+  'g',
+);
+
+/**
+ * Pre-process `{{else if flag}}` chains by rewriting each innermost
+ * occurrence into an equivalent nested `{{else}}{{#if flag}}` block.
+ *
+ * Examples:
+ *   `{{#if a}}A{{else if b}}B{{else}}C{{/if}}`
+ *   → `{{#if a}}A{{else}}{{#if b}}B{{else}}C{{/if}}{{/if}}`
+ *
+ * Multi-level chains are normalised iteratively, one level per pass:
+ *   `{{#if a}}A{{else if b}}B{{else if c}}C{{/if}}`
+ *   pass 1 → `{{#if a}}A{{else}}{{#if b}}B{{else if c}}C{{/if}}{{/if}}`
+ *   pass 2 → `{{#if a}}A{{else}}{{#if b}}B{{else}}{{#if c}}C{{/if}}{{/if}}{{/if}}`
+ *
+ * The pattern matches only segments whose content contains no nested
+ * `{{#if` markers, mirroring the innermost-first invariant of
+ * `resolveConditionals`. This ensures `{{else if}}` chains that are
+ * themselves nested inside outer `{{#if}}…{{else}}…{{/if}}` blocks are
+ * handled safely.
+ *
+ * @internal
+ */
+function resolveElseIf(text: string): string {
+  if (!text.includes('{{else if ')) {
+    return text;
+  }
+  // Use the module-level ELSE_IF_PATTERN constant. replace() resets the
+  // regex's lastIndex before each call, so sharing the instance is safe.
+  let result = text;
+  let prev: string;
+  do {
+    prev = result;
+    result = result.replace(
+      ELSE_IF_PATTERN,
+      (_match: string, flag: string, content: string): string =>
+        `{{else}}{{#if ${flag}}}${content}{{/if}}{{/if}}`,
+    );
+  } while (result !== prev);
+  return result;
+}
 
 /**
  * Resolve conditional blocks in a template string.
@@ -13,9 +75,14 @@
  * Syntax:
  *   `{{#if flag}}content{{/if}}`
  *   `{{#if flag}}truthy-content{{else}}falsy-content{{/if}}`
+ *   `{{#if flag}}truthy-content{{else if flag2}}branch2{{else}}falsy-content{{/if}}`
  *
  * Nested conditionals inside `{{else}}` branches are supported:
  *   `{{#if a}}A{{else}}{{#if b}}B{{else}}C{{/if}}{{/if}}`
+ *
+ * `{{else if}}` chains are normalised into nested `{{#if}}` blocks before
+ * resolution, so they work transparently alongside — and can be combined
+ * with — traditional nested `{{#if}}` syntax.
  *
  * Behaviour:
  * - When `context[flag]` is truthy: the delimiters are stripped and the
@@ -45,15 +112,18 @@ export function resolveConditionals(
   text: string,
   context: Record<string, unknown>,
 ): string {
+  // Normalise {{else if}} chains into nested {{else}}{{#if}} blocks so the
+  // existing innermost-first resolution loop handles them transparently.
+  const normalized = resolveElseIf(text);
+
   // Match only innermost conditional blocks — those whose truthy and falsy
   // content contains no nested `{{#if`. The negative lookahead
   // `(?!\{\{#if\b)` ensures the quantifier stops before any nested opener,
   // so each pass resolves one depth level. Subsequent passes bubble outward
   // until the output stabilises (no more `{{#if` markers remain).
-  const noNestedIf = String.raw`(?:(?!\{\{#if\b)[\s\S])*?`;
   const pattern = new RegExp(
-    String.raw`\n*\{\{#if (\w+)\}\}(${noNestedIf})` +
-      String.raw`(?:\{\{else\}\}(${noNestedIf}))?\{\{\/if\}\}\n*`,
+    String.raw`\n*\{\{#if (\w+)\}\}(${NO_NESTED_IF})` +
+      String.raw`(?:\{\{else\}\}(${NO_NESTED_IF}))?\{\{\/if\}\}\n*`,
     'g',
   );
 
@@ -75,7 +145,7 @@ export function resolveConditionals(
     return '\n';
   };
 
-  let result = text;
+  let result = normalized;
   let prev: string;
   do {
     prev = result;
