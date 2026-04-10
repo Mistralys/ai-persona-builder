@@ -59,6 +59,7 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 | `{{> partialName}}` | Partial inclusion | `resolvePartials()` — depth-2 recursion |
 | `{{#if flag}}…{{/if}}` | Conditional block | `resolveConditionals()` |
 | `{{#if flag}}…{{else}}…{{/if}}` | Conditional with fallback | `resolveConditionals()` |
+| `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` via pre-processor |
 | `{{variableName}}` | Variable substitution | `resolveVariables()` |
 
 **Processing order matters:** partials → conditionals → variables. Running them out of order will produce incorrect output.

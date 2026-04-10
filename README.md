@@ -1,6 +1,6 @@
 # AI Persona Builder
 
-Build AI persona instruction files for **VS Code Chat** and **Claude Code** from YAML metadata and Markdown templates — with zero configuration friction.
+Build AI persona instruction files for **VS Code Chat**, **Claude Code** and **LangGraph Deep Agents** from YAML metadata and Markdown templates — with zero configuration friction.
 
 Define your personas once as simple YAML + Markdown sources, and the library generates correctly formatted instruction files for both IDEs. A plugin system lets you inject custom frontmatter, run validators, or post-process output without touching the core engine.
 
@@ -24,6 +24,9 @@ Define your personas once as simple YAML + Markdown sources, and the library gen
 ```bash
 npm install @mistralys/persona-builder
 ```
+
+- View on NPM: https://www.npmjs.com/package/@mistralys/persona-builder
+- View on Github: https://github.com/Mistralys/ai-persona-builder
 
 ### Programmatic API
 
