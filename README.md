@@ -103,7 +103,7 @@ MIT
 
 ## Release Workflow
 
-1. Add changelog entries
+1. Add changelog entries (do not change package.json version)
 2. `npm version 0.0.0` - Updates package and lock versions + commit
 3. `npm publish` - Publish version on NPM
 4. `git push origin 0.0.0` - Add the tag in GIT
