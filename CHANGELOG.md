@@ -2,6 +2,21 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.4.0 - Dynamic Partials
+- Builder: Added `BuildConfig.partials` inline partials map as the lowest-precedence layer.
+- Builder: Added `BuildConfig.variables` global template variables as lowest-priority context layer.
+- Builder: Added `SuiteConfig.variables` suite-scoped template variables for per-suite defaults.
+- Builder: Extended partials resolution to a five-layer stack with documented precedence order.
+- Builder: Extended context merge chain to a seven-layer stack with documented precedence order.
+- Plugins: Added `onPartials` hook for suite-level dynamic partial injection after disk load.
+- Plugins: Added `onPersonaPartials` hook for per-persona partial overrides before rendering.
+- Tests: Added four new test suites covering partials config, suite variables, and persona hooks.
+- Tests: Added integration-suite fixture set for multi-persona test scenarios.
+- Docs: Added dynamic partials guide and plugins guide.
+- Docs: Updated configuration, directory-convention, and template-syntax guides.
+- Docs: Updated project manifest for new API surface, constraints, and data flows.
+- Agents: Added release-check skill.
+
 ## v2.3.0 - Else-If Chain Support
 - Engine: Added `{{else if flag}}` chain syntax; arbitrary depth, first truthy branch wins.
 - Engine: `{{else if}}` composes correctly with existing nested `{{#if}}` syntax.
