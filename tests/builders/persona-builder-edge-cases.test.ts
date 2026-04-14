@@ -23,6 +23,7 @@ import path from 'node:path';
 import { build, buildPersona, buildSuite } from '../../src/builders/persona-builder.js';
 import type { BuildConfig } from '../../src/builders/types.js';
 import type { PersonaBuildPlugin, SuiteConfig } from '../../src/plugins/types.js';
+import { createMinimalSuite } from '../helpers/suite-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Temp directory helpers
@@ -41,43 +42,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(testTmpDir, { recursive: true, force: true });
 });
-
-async function createMinimalSuite(
-  baseDir: string,
-  opts: {
-    sharedYaml?: string;
-    personaYaml?: string;
-    contentMd?: string;
-    personaName?: string;
-  } = {},
-): Promise<{ suiteDir: string; outDir: string }> {
-  const suiteDir = path.join(baseDir, 'my-suite');
-  const outDir = path.join(baseDir, 'out');
-
-  await mkdir(path.join(suiteDir, 'meta'), { recursive: true });
-  await mkdir(path.join(suiteDir, 'content'), { recursive: true });
-  await mkdir(path.join(suiteDir, 'partials'), { recursive: true });
-
-  const pName = opts.personaName ?? 'test-persona';
-
-  await writeFile(
-    path.join(suiteDir, 'meta', '_shared.yaml'),
-    opts.sharedYaml ?? `default_version: '2.0.0'\nauthor: test-author\n`,
-  );
-
-  await writeFile(
-    path.join(suiteDir, 'meta', `${pName}.yaml`),
-    opts.personaYaml ??
-      `name: Test Persona\ndescription: A test persona.\nvs_file_name: ${pName}.agent.md\ncc_file_name: ${pName}.md\ntools:\n  - read\n`,
-  );
-
-  await writeFile(
-    path.join(suiteDir, 'content', `${pName}.md`),
-    opts.contentMd ?? `# {{name}}\n\n{{description}}\n`,
-  );
-
-  return { suiteDir, outDir };
-}
 
 // ---------------------------------------------------------------------------
 // EC-1: Empty suites record
@@ -137,7 +101,7 @@ describe('EC-2: strict mode without check — file write then throw', () => {
 
     // Despite the throw, the output file SHOULD have been written
     // (build processes all suites first, then throws at the end)
-    const outputFile = path.join(outDir, 'vscode', 'test-persona.agent.md');
+    const outputFile = path.join(outDir, 'vscode', 'agent.agent.md');
     expect(existsSync(outputFile)).toBe(true);
   });
 });
@@ -149,7 +113,7 @@ describe('EC-2: strict mode without check — file write then throw', () => {
 describe('EC-3: persona YAML missing name field', () => {
   it('derives the name from the filename stem when name is absent in YAML', async () => {
     const { suiteDir, outDir } = await createMinimalSuite(testTmpDir, {
-      personaYaml: `description: No name here.\nvs_file_name: test-persona.agent.md\ncc_file_name: test-persona.md\n`,
+      personaYaml: `description: No name here.\nvs_file_name: agent.agent.md\ncc_file_name: agent.md\n`,
       contentMd: '# {{name}}\n\n{{description}}\n',
     });
 
@@ -168,8 +132,8 @@ describe('EC-3: persona YAML missing name field', () => {
     const summary = await build(config);
 
     expect(summary.success).toBe(true);
-    // Name should fall back to 'test-persona' (the filename stem)
-    expect(summary.results[0].content).toContain('test-persona');
+    // Name should fall back to 'agent' (the filename stem)
+    expect(summary.results[0].content).toContain('agent');
     expect(summary.results[0].content).toContain('No name here.');
   });
 });

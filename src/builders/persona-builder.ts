@@ -18,6 +18,21 @@
  *       agent name map, then iterates all suites × targets, calls
  *       buildSuite() for each combination, and returns a BuildSummary.
  *       Respects --check (no writes) and --strict (fail on warnings/errors).
+ *
+ * Template variable injection (7-layer merge order, later layers win):
+ *
+ *  1. BuildConfig.variables    — global defaults; available to every suite
+ *  2. SuiteConfig.variables    — suite-level overrides
+ *  3. _shared.yaml fields      — shared metadata for the suite
+ *  4. Per-persona YAML fields  — per-persona metadata
+ *  5. Derived fields           — version fallback, tools serialisation, etc.
+ *  6. Cross-suite agent map    — agent_<slug> / agent_slug_<slug> entries
+ *  7. Target flags             — target_<name> booleans; always highest precedence
+ *
+ * Callers inject global or suite-scoped variables via `BuildConfig.variables`
+ * and `SuiteConfig.variables` respectively. Both fields are forwarded by
+ * buildPersona() to the internal buildContext() function as the two
+ * lowest-priority layers in the merge chain.
  */
 
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -37,7 +52,9 @@ import { serializeTools, serializeToolsList } from '../engine/serializer.js';
 import { loadPartials } from '../loaders/partials-loader.js';
 import {
   runSuiteInit,
+  runPartials,
   runBuildContext,
+  runPersonaPartials,
   runPostRender,
   runValidate,
 } from '../plugins/runner.js';
@@ -223,23 +240,45 @@ async function buildAgentNameMap(
  * Build the merged template context for a single persona.
  *
  * Merge order (later values win):
- *   1. sharedMeta (suite-level defaults)
- *   2. per-persona YAML fields
- *   3. derived/computed fields (version fallback, etc.)
- *   4. agentMap entries (only for keys not already present)
+ *   1. configVariables (lowest priority — global BuildConfig.variables)
+ *   2. suiteVariables  (suite-level SuiteConfig.variables)
+ *   3. sharedMeta      (parsed _shared.yaml fields)
+ *   4. personaMeta     (per-persona YAML fields)
+ *   5. derived/computed fields (version fallback, tools serialisation, etc.)
+ *   6. agentMap entries (only for keys not already present)
+ *   7. target flags    (injected last; always win)
  *
- * @param personaMeta  Per-persona YAML as a plain record
- * @param sharedMeta   Parsed `_shared.yaml` fields
- * @param agentMap     Cross-suite agent name map (injected by build())
- * @returns            Merged rendering context
+ * @param options.personaMeta      Per-persona YAML as a plain record
+ * @param options.sharedMeta       Parsed `_shared.yaml` fields
+ * @param options.agentMap         Cross-suite agent name map (injected by build())
+ * @param options.target           The current build target (forwarded to plugins)
+ * @param options.registry         Target registry for context-flag injection
+ * @param options.configVariables  Optional global variables from BuildConfig.variables
+ *                                 (lowest precedence; overridden by all other layers)
+ * @param options.suiteVariables   Optional suite-level variables from SuiteConfig.variables
+ *                                 (overrides configVariables; overridden by sharedMeta and personaMeta)
+ * @returns                        Merged rendering context
  */
-function buildContext(
-  personaMeta: Record<string, unknown>,
-  sharedMeta: Record<string, unknown>,
-  agentMap: Record<string, string> = {},
-  target?: TargetType,
-  registry?: TargetRegistry,
-): Record<string, unknown> {
+interface BuildContextOptions {
+  personaMeta: Record<string, unknown>;
+  sharedMeta: Record<string, unknown>;
+  agentMap?: Record<string, string>;
+  target?: TargetType;
+  registry?: TargetRegistry;
+  configVariables?: Record<string, unknown>;
+  suiteVariables?: Record<string, unknown>;
+}
+
+function buildContext(options: BuildContextOptions): Record<string, unknown> {
+  const {
+    personaMeta,
+    sharedMeta,
+    agentMap = {},
+    target,
+    registry,
+    configVariables,
+    suiteVariables,
+  } = options;
   const version =
     typeof personaMeta['version'] === 'string'
       ? personaMeta['version']
@@ -247,8 +286,11 @@ function buildContext(
         ? sharedMeta['default_version']
         : '0.0.0';
 
-  // Merge base: shared first, persona overrides
+  // Merge base: configVariables first (lowest priority), then suiteVariables,
+  // then sharedMeta, then personaMeta (highest priority among YAML sources).
   const merged: Record<string, unknown> = {
+    ...(configVariables ?? {}),
+    ...(suiteVariables ?? {}),
     ...sharedMeta,
     ...personaMeta,
     version,
@@ -333,22 +375,39 @@ function buildContext(
  *   1. Load sharedMeta + personaMeta (callers supply pre-loaded values)
  *   2. Build merged context
  *   3. Run onBuildContext plugin hooks (context accumulation)
- *   4. Resolve frontmatter template → render frontmatter
- *   5. Load content template
- *   6. Render body: partials → conditionals → variables → post-process
- *   7. Assemble final output (frontmatter + body)
- *   8. Run onPostRender plugin hooks (output chain)
- *   9. Run onValidate plugin hooks (validation collection)
- *  10. Determine output file path
- *  11. Write output file (unless check mode)
- *  12. Return BuildResult
+ *   4. Run onPersonaPartials plugin hooks (shallow-copy partials map, persona-scoped)
+ *   5. Render frontmatter template → render frontmatter
+ *   6. Load content template
+ *   7. Render body: partials → conditionals → variables → post-process
+ *   8. Assemble final output (frontmatter + body)
+ *   9. Run onPostRender plugin hooks (output chain)
+ *  10. Run onValidate plugin hooks (validation collection)
+ *  11. Determine output file path
+ *  12. Write output file (unless check mode)
+ *  13. Return BuildResult
  *
  * @param personaYamlPath  Absolute path to the persona YAML source file
  * @param suiteName        Identifier for the suite this persona belongs to
- * @param suiteConfig      Suite configuration object
+ * @param suiteConfig      Suite configuration object. `suiteConfig.variables`
+ *                         is forwarded to `buildContext()` as the
+ *                         `suiteVariables` layer (layer 2 of 7) — these values
+ *                         override any `config.variables` but are themselves
+ *                         overridden by `_shared.yaml` and per-persona fields.
  * @param sharedMeta       Pre-loaded `_shared.yaml` contents
- * @param partialsMap      Pre-loaded partials map (shared + suite-local merged)
- * @param config           Top-level BuildConfig
+ * @param partialsMap      Pre-loaded partials map (shared + suite-local merged).
+ *                         This map is **not** passed directly to rendering.
+ *                         Instead, a shallow copy (`{ ...partialsMap }`) is
+ *                         created at step 3b and passed to the `onPersonaPartials`
+ *                         plugin hooks — the hooks' accumulated output map is what
+ *                         reaches `resolvePartials`, not `partialsMap` itself.
+ *                         This ensures that persona-level overrides or injections
+ *                         do not leak back into the caller's reference or into
+ *                         subsequent personas in the same suite.
+ * @param config           Top-level BuildConfig. `config.variables` is
+ *                         forwarded to `buildContext()` as the
+ *                         `configVariables` layer (layer 1 of 7, lowest
+ *                         priority) — global defaults available to every
+ *                         persona across all suites.
  * @param plugins          Registered plugins
  * @param target           Target output format
  * @param agentMap         Pre-built cross-suite agent name map
@@ -377,7 +436,15 @@ export async function buildPersona(
   const personaMeta = await loadPersonaYaml(personaYamlPath);
 
   // ── 2. Build merged context ───────────────────────────────────────────────
-  let context = buildContext(personaMeta, sharedMeta, agentMap, target, registry);
+  let context = buildContext({
+    personaMeta,
+    sharedMeta,
+    agentMap,
+    target,
+    registry,
+    configVariables: config.variables,
+    suiteVariables: suiteConfig.variables,
+  });
 
   // ── 3. Plugin onBuildContext ──────────────────────────────────────────────
   // Cast context to PersonaMetadata for the plugin runner (it requires a
@@ -385,34 +452,48 @@ export async function buildPersona(
   const personaMetaTyped = personaMeta as PersonaMetadata;
   context = runBuildContext(plugins, context, personaMetaTyped, suiteConfig, target);
 
-  // ── 4. Render frontmatter ─────────────────────────────────────────────────
+  // ── 4. Plugin onPersonaPartials ──────────────────────────────────────────────
+  // Create a shallow copy of the suite-level partials map so that any
+  // persona-level overrides or injections do not leak to other personas.
+  // The copy is then mutated (accumulated) by onPersonaPartials plugins and
+  // used exclusively for this persona's rendering pass.
+  const personaPartialsMap = runPersonaPartials(
+    plugins,
+    { ...partialsMap },
+    personaMetaTyped,
+    context,
+    suiteConfig,
+    target,
+  );
+
+  // ── 5. Render frontmatter ─────────────────────────────────────────────────
   const fmTemplate = resolveFrontmatterTemplate(target, plugins, config.frontmatter, registry);
   const contentBasename = path.basename(personaYamlPath, '.yaml') + '.md';
   const frontmatter = renderFrontmatter(fmTemplate, context, contentBasename);
 
-  // ── 5. Load content template ──────────────────────────────────────────────
+  // ── 6. Load content template ──────────────────────────────────────────────
   const contentSubdir = suiteConfig.contentSubdir ?? 'content';
   const contentPath = path.join(suiteConfig.srcDir, contentSubdir, contentBasename);
   const bodyTemplate = normalizeNewlines(await readFile(contentPath, 'utf8'));
 
-  // ── 6. Render body ────────────────────────────────────────────────────────
-  let body = resolvePartials(bodyTemplate, partialsMap);
+  // ── 7. Render body ────────────────────────────────────────────────────────
+  let body = resolvePartials(bodyTemplate, personaPartialsMap);
   body = resolveConditionals(body, context);
   body = resolveVariables(body, context, contentBasename);
   body = collapseBlankLines(body);
   body = ensureBlankLineBeforeHeadings(body);
   body = body.trimEnd();
 
-  // ── 7. Assemble output ────────────────────────────────────────────────────
+  // ── 8. Assemble output ────────────────────────────────────────────────────
   let output = normalizeNewlines(`${frontmatter}\n\n${body}\n`);
 
-  // ── 8. Plugin onPostRender ────────────────────────────────────────────────
+  // ── 9. Plugin onPostRender ────────────────────────────────────────────────
   output = runPostRender(plugins, output, personaMetaTyped, target);
 
-  // ── 9. Plugin onValidate ──────────────────────────────────────────────────
+  // ── 10. Plugin onValidate ──────────────────────────────────────────────────
   const validationResults: ValidationResult[] = runValidate(plugins, personaMetaTyped, suiteConfig, target);
 
-  // ── 10. Determine output file path ────────────────────────────────────────
+  // ── 11. Determine output file path ────────────────────────────────────────
   // Resolve the registry definition once — used for both outputDirKey (map
   // lookup) and filenameContextKey (output filename override).
   const def = registry.has(target) ? registry.get(target) : undefined;
@@ -426,7 +507,7 @@ export async function buildPersona(
       : contentBasename;
   const outputPath = path.join(outputDir, outputBasename);
 
-  // ── 11. Write (unless check mode) ─────────────────────────────────────────
+  // ── 12. Write (unless check mode) ─────────────────────────────────────────
   const check = config.check ?? false;
   let written = false;
 
@@ -456,10 +537,11 @@ export async function buildPersona(
  *
  * Pipeline:
  *   1. Load `_shared.yaml` for the suite
- *   2. Load merged partials (shared → suite-local)
+ *   2. Load merged partials (config.partials → shared → suite-local)
  *   3. Run `onSuiteInit` on all plugins
- *   4. Discover all persona YAML files
- *   5. Call `buildPersona()` for each
+ *   4. Run `onPartials` on all plugins (highest priority: may override any file-based partial)
+ *   5. Discover all persona YAML files
+ *   6. Call `buildPersona()` for each
  *
  * @param suiteName    Identifier for this suite
  * @param suiteConfig  Suite configuration
@@ -490,8 +572,9 @@ export async function buildSuite(
   const sharedYamlPath = path.join(suiteConfig.srcDir, metaSubdir, '_shared.yaml');
   const sharedMeta = await loadRawYaml(sharedYamlPath);
 
-  // ── 2. Load partials (two-layer: shared base → suite-local override) ──────
-  let partialsMap: Record<string, string> = {};
+  // ── 2. Load partials (three-layer: config.partials → shared → suite-local) ─
+  // Start with config.partials as the lowest-priority base layer.
+  let partialsMap: Record<string, string> = { ...(config.partials ?? {}) };
 
   if (config.sharedPartialsDir && existsSync(config.sharedPartialsDir)) {
     partialsMap = { ...partialsMap, ...(await loadPartials(config.sharedPartialsDir)) };
@@ -506,10 +589,15 @@ export async function buildSuite(
   // ── 3. Plugin onSuiteInit ─────────────────────────────────────────────────
   runSuiteInit(plugins, suiteConfig, sharedMeta);
 
-  // ── 4. Discover persona YAML files ────────────────────────────────────────
+  // ── 4. Plugin onPartials ────────────────────────────────────────────────────
+  // Invoked after onSuiteInit and after all file-based partials are loaded.
+  // Plugins may inject new partials or override any file-based entry.
+  partialsMap = runPartials(plugins, partialsMap, suiteName, suiteConfig);
+
+  // ── 5. Discover persona YAML files ───────────────────────────────────────
   const personaYamlPaths = await discoverSuitePersonaYamls(suiteConfig);
 
-  // ── 5. Build each persona ─────────────────────────────────────────────────
+  // ── 6. Build each persona ────────────────────────────────────────────────────
   const results: BuildResult[] = [];
   for (const yamlPath of personaYamlPaths) {
     const result = await buildPersona(

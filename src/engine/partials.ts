@@ -23,7 +23,12 @@
  *
  * @param text       - Template string potentially containing {{> name}} markers
  * @param partialsMap - Map of partial name → partial content
- * @param depth      - Current recursion depth (callers should omit; defaults to 0)
+ * @param depth      - **Internal recursion counter — callers must always omit this
+ *                     parameter.** It exists solely so the function can track its own
+ *                     nesting level across recursive calls. Passing a non-zero value
+ *                     bypasses the depth guard (e.g. `resolvePartials(text, map, 5)`
+ *                     expands nothing). This parameter will be removed from the public
+ *                     signature and marked `@internal` in a future release.
  * @returns          The template string with partial markers replaced
  */
 export function resolvePartials(

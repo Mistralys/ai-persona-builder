@@ -3,8 +3,9 @@
  *
  * Unit tests for the plugin runner — src/plugins/runner.ts
  *
- * Covers all four hook functions (runSuiteInit, runBuildContext,
- * runPostRender, runValidate) with three plugin-count scenarios:
+ * Covers all six hook functions (runSuiteInit, runPartials, runBuildContext,
+ * runPersonaPartials, runPostRender, runValidate) with three plugin-count
+ * scenarios:
  *   - 0 plugins: runner handles empty list gracefully
  *   - 1 plugin: single hook invocation works correctly
  *   - 3 plugins: hooks are invoked in registration order and
@@ -17,7 +18,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   runSuiteInit,
+  runPartials,
   runBuildContext,
+  runPersonaPartials,
   runPostRender,
   runValidate,
 } from '../../src/plugins/runner.js';
@@ -234,6 +237,19 @@ describe('runBuildContext()', () => {
     const result = runBuildContext(plugins, { original: true }, persona, suite);
     expect(result).toEqual({ original: true, touched: true });
   });
+
+  // Null-guard: plugin returning undefined falls back to the previous accumulator
+  it('preserves the accumulator when a plugin returns undefined from onBuildContext', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'undefined-returner',
+      onBuildContext(_ctx) {
+        return undefined as unknown as Record<string, unknown>;
+      },
+    };
+    const initial = { preserved: true };
+    const result = runBuildContext([plugin], initial, persona, suite);
+    expect(result).toEqual({ preserved: true });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -340,6 +356,18 @@ describe('runPostRender()', () => {
     };
     runPostRender([plugin, plugin], 'x', persona, 'claude-code');
     expect(targets).toEqual(['claude-code', 'claude-code']);
+  });
+
+  // Null-guard: plugin returning undefined falls back to the previous output
+  it('preserves the output when a plugin returns undefined from onPostRender', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'undefined-returner',
+      onPostRender(_output) {
+        return undefined as unknown as string;
+      },
+    };
+    const result = runPostRender([plugin], 'original content', persona, 'vscode');
+    expect(result).toBe('original content');
   });
 });
 
@@ -476,5 +504,293 @@ describe('runValidate()', () => {
     expect(severities).toContain('error');
     expect(severities).toContain('warning');
     expect(severities).toContain('info');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runPartials
+// ---------------------------------------------------------------------------
+
+describe('runPartials()', () => {
+  const suiteName = 'test-suite';
+
+  // 0-plugin scenario
+  it('returns the original partials map by identity when the plugin list is empty', () => {
+    const initial: Record<string, string> = { header: '# Hello' };
+    const result = runPartials([], initial, suiteName, suite);
+    expect(result).toBe(initial); // same reference — not just equal
+  });
+
+  // 0-plugin: value equality fallback
+  it('returns a map equal to the initial map when no plugins implement onPartials', () => {
+    const initial: Record<string, string> = { footer: 'end' };
+    const result = runPartials([], initial, suiteName, suite);
+    expect(result).toEqual({ footer: 'end' });
+  });
+
+  // 1-plugin scenario: single invocation
+  it('calls onPartials on a single plugin and returns its result', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'partials-plugin',
+      onPartials(map) {
+        return { ...map, injected: 'new partial' };
+      },
+    };
+    const result = runPartials([plugin], { base: 'base content' }, suiteName, suite);
+    expect(result).toEqual({ base: 'base content', injected: 'new partial' });
+  });
+
+  // 1-plugin: receives correct arguments
+  it('passes partialsMap, suiteName, and suite to the plugin hook', () => {
+    const onPartials = vi.fn((map: Record<string, string>) => map);
+    const plugin: PersonaBuildPlugin = { name: 'arg-check', onPartials };
+    const initial = { key: 'val' };
+    runPartials([plugin], initial, suiteName, suite);
+    expect(onPartials).toHaveBeenCalledWith(initial, suiteName, suite);
+  });
+
+  // Skips plugins without the hook — map passes through unchanged
+  it('skips plugins that do not implement onPartials — map passes through unchanged', () => {
+    const plugins: PersonaBuildPlugin[] = [
+      { name: 'no-hook-1' },
+      {
+        name: 'with-hook',
+        onPartials(map) {
+          return { ...map, added: 'yes' };
+        },
+      },
+      { name: 'no-hook-2' },
+    ];
+    const result = runPartials(plugins, { original: 'keep' }, suiteName, suite);
+    expect(result).toEqual({ original: 'keep', added: 'yes' });
+  });
+
+  // 3-plugin scenario: accumulating chain
+  it('accumulates partials across 3 plugins — each plugin receives previous plugin\'s output', () => {
+    const plugins: PersonaBuildPlugin[] = [
+      {
+        name: 'p1',
+        onPartials(map) {
+          return { ...map, p1: 'from-p1' };
+        },
+      },
+      {
+        name: 'p2',
+        onPartials(map) {
+          // must include p1's contribution
+          return { ...map, p2: typeof map['p1'] === 'string' ? 'saw-p1' : 'missing-p1' };
+        },
+      },
+      {
+        name: 'p3',
+        onPartials(map) {
+          const hasBoth = typeof map['p1'] === 'string' && typeof map['p2'] === 'string';
+          return { ...map, p3: hasBoth ? 'has-both' : 'missing' };
+        },
+      },
+    ];
+    const result = runPartials(plugins, {}, suiteName, suite);
+    expect(result['p1']).toBe('from-p1');
+    expect(result['p2']).toBe('saw-p1');
+    expect(result['p3']).toBe('has-both');
+  });
+
+  // 3-plugin scenario: invocation order verified
+  it('invokes onPartials on 3 plugins in registration order', () => {
+    const callOrder: string[] = [];
+    const makePlugin = (name: string): PersonaBuildPlugin => ({
+      name,
+      onPartials(map) {
+        callOrder.push(name);
+        return map;
+      },
+    });
+    runPartials([makePlugin('first'), makePlugin('second'), makePlugin('third')], {}, suiteName, suite);
+    expect(callOrder).toEqual(['first', 'second', 'third']);
+  });
+
+  // Cross-hook isolation: onPersonaPartials on same plugin is not called
+  it('does not invoke onPersonaPartials when running runPartials', () => {
+    const onPersonaPartials = vi.fn((map: Record<string, string>) => map);
+    const plugin: PersonaBuildPlugin = {
+      name: 'dual-hook',
+      onPartials(map) {
+        return { ...map, suite: 'set' };
+      },
+      onPersonaPartials,
+    };
+    runPartials([plugin], {}, suiteName, suite);
+    expect(onPersonaPartials).not.toHaveBeenCalled();
+  });
+
+  // Null-guard: plugin returning undefined falls back to the previous accumulator
+  it('preserves the accumulator when a plugin returns undefined from onPartials', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'undefined-returner',
+      onPartials(_map) {
+        return undefined as unknown as Record<string, string>;
+      },
+    };
+    const initial = { preserved: 'yes' };
+    const result = runPartials([plugin], initial, suiteName, suite);
+    expect(result).toEqual({ preserved: 'yes' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runPersonaPartials
+// ---------------------------------------------------------------------------
+
+describe('runPersonaPartials()', () => {
+  const ctx: Record<string, unknown> = { role: 'developer' };
+
+  // 0-plugin scenario
+  it('returns the original partials map by identity when the plugin list is empty', () => {
+    const initial: Record<string, string> = { header: '# Hello' };
+    const result = runPersonaPartials([], initial, persona, ctx, suite);
+    expect(result).toBe(initial); // same reference
+  });
+
+  // 0-plugin: value equality fallback
+  it('returns a map equal to the initial map when no plugins implement onPersonaPartials', () => {
+    const initial: Record<string, string> = { footer: 'end' };
+    const result = runPersonaPartials([], initial, persona, ctx, suite);
+    expect(result).toEqual({ footer: 'end' });
+  });
+
+  // 1-plugin scenario: single invocation
+  it('calls onPersonaPartials on a single plugin and returns its result', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'persona-partials-plugin',
+      onPersonaPartials(map) {
+        return { ...map, injected: 'per-persona partial' };
+      },
+    };
+    const result = runPersonaPartials([plugin], { base: 'base content' }, persona, ctx, suite);
+    expect(result).toEqual({ base: 'base content', injected: 'per-persona partial' });
+  });
+
+  // 1-plugin: receives correct arguments including optional target
+  it('passes partialsMap, persona, context, suite, and target to the plugin hook', () => {
+    const onPersonaPartials = vi.fn((map: Record<string, string>) => map);
+    const plugin: PersonaBuildPlugin = { name: 'arg-check', onPersonaPartials };
+    const initial = { key: 'val' };
+    runPersonaPartials([plugin], initial, persona, ctx, suite, 'vscode');
+    expect(onPersonaPartials).toHaveBeenCalledWith(initial, persona, ctx, suite, 'vscode');
+  });
+
+  // 1-plugin: target defaults to undefined when not supplied
+  it('forwards undefined target when no target argument is provided', () => {
+    const onPersonaPartials = vi.fn((map: Record<string, string>) => map);
+    const plugin: PersonaBuildPlugin = { name: 'no-target', onPersonaPartials };
+    runPersonaPartials([plugin], {}, persona, ctx, suite);
+    expect(onPersonaPartials).toHaveBeenCalledWith({}, persona, ctx, suite, undefined);
+  });
+
+  // Skips plugins without the hook — map passes through unchanged
+  it('skips plugins that do not implement onPersonaPartials — map passes through unchanged', () => {
+    const plugins: PersonaBuildPlugin[] = [
+      { name: 'no-hook-1' },
+      {
+        name: 'with-hook',
+        onPersonaPartials(map) {
+          return { ...map, added: 'yes' };
+        },
+      },
+      { name: 'no-hook-2' },
+    ];
+    const result = runPersonaPartials(plugins, { original: 'keep' }, persona, ctx, suite);
+    expect(result).toEqual({ original: 'keep', added: 'yes' });
+  });
+
+  // 3-plugin scenario: accumulating chain
+  it('accumulates partials across 3 plugins — each plugin receives previous plugin\'s output', () => {
+    const plugins: PersonaBuildPlugin[] = [
+      {
+        name: 'p1',
+        onPersonaPartials(map) {
+          return { ...map, p1: 'from-p1' };
+        },
+      },
+      {
+        name: 'p2',
+        onPersonaPartials(map) {
+          return { ...map, p2: typeof map['p1'] === 'string' ? 'saw-p1' : 'missing-p1' };
+        },
+      },
+      {
+        name: 'p3',
+        onPersonaPartials(map) {
+          const hasBoth = typeof map['p1'] === 'string' && typeof map['p2'] === 'string';
+          return { ...map, p3: hasBoth ? 'has-both' : 'missing' };
+        },
+      },
+    ];
+    const result = runPersonaPartials(plugins, {}, persona, ctx, suite);
+    expect(result['p1']).toBe('from-p1');
+    expect(result['p2']).toBe('saw-p1');
+    expect(result['p3']).toBe('has-both');
+  });
+
+  // 3-plugin scenario: invocation order verified
+  it('invokes onPersonaPartials on 3 plugins in registration order', () => {
+    const callOrder: string[] = [];
+    const makePlugin = (name: string): PersonaBuildPlugin => ({
+      name,
+      onPersonaPartials(map) {
+        callOrder.push(name);
+        return map;
+      },
+    });
+    runPersonaPartials(
+      [makePlugin('first'), makePlugin('second'), makePlugin('third')],
+      {},
+      persona,
+      ctx,
+      suite,
+    );
+    expect(callOrder).toEqual(['first', 'second', 'third']);
+  });
+
+  // Cross-hook isolation: onPartials on same plugin is not called
+  it('does not invoke onPartials when running runPersonaPartials', () => {
+    const onPartials = vi.fn((map: Record<string, string>) => map);
+    const plugin: PersonaBuildPlugin = {
+      name: 'dual-hook',
+      onPartials,
+      onPersonaPartials(map) {
+        return { ...map, persona: 'set' };
+      },
+    };
+    runPersonaPartials([plugin], {}, persona, ctx, suite);
+    expect(onPartials).not.toHaveBeenCalled();
+  });
+
+  // Plugin implementing only onPartials does not affect runPersonaPartials
+  it('plugin implementing only onPartials does not affect runPersonaPartials output', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'partials-only',
+      onPartials(map) {
+        return { ...map, suiteKey: 'suite' };
+      },
+      // no onPersonaPartials
+    };
+    const initial = { base: 'val' };
+    const result = runPersonaPartials([plugin], initial, persona, ctx, suite);
+    expect(result).toEqual({ base: 'val' }); // unchanged — onPartials is not called
+    expect(result['suiteKey']).toBeUndefined();
+  });
+
+  // Null-guard: plugin returning undefined falls back to the previous accumulator
+  it('preserves the accumulator when a plugin returns undefined from onPersonaPartials', () => {
+    const plugin: PersonaBuildPlugin = {
+      name: 'undefined-returner',
+      onPersonaPartials(_map) {
+        return undefined as unknown as Record<string, string>;
+      },
+    };
+    const initial = { preserved: 'yes' };
+    const result = runPersonaPartials([plugin], initial, persona, ctx, suite);
+    expect(result).toEqual({ preserved: 'yes' });
   });
 });

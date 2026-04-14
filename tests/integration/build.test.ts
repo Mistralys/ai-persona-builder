@@ -558,6 +558,249 @@ describe('build() integration — three-target build (WP-009 AC-2)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Integration test: BuildConfig.variables (WP-008 AC-1)
+// ---------------------------------------------------------------------------
+
+describe('build() integration — BuildConfig.variables (WP-008 AC-1)', () => {
+  const INTEGRATION_SUITE_DIR = path.join(FIXTURES_ROOT, 'integration-suite');
+  const WP008_BASE = path.join(OUT_ROOT, 'wp008-variables');
+
+  it('variable value from BuildConfig.variables appears in rendered persona content', async () => {
+    const outVscode = path.join(WP008_BASE, 'vscode');
+
+    const config: BuildConfig = {
+      suites: {
+        integration: {
+          srcDir: INTEGRATION_SUITE_DIR,
+          outputDirs: { vscode: outVscode },
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+      variables: {
+        custom_global_var: 'GLOBAL_VALUE_XYZ',
+      },
+      partials: {
+        // Provide the partial so {{> dynamic_partial}} resolves cleanly.
+        // The variable substitution under test is custom_global_var above;
+        // the partial entry is a necessary companion to prevent an unresolved-marker warning.
+        dynamic_partial: 'Dynamic partial default content.',
+      },
+    };
+
+    const summary = await build(config);
+
+    expect(summary.success).toBe(true);
+    expect(summary.totalBuilt).toBeGreaterThanOrEqual(1);
+
+    // At least one persona must contain the injected variable value
+    const rendered = summary.results.map((r) => r.content);
+    const hasVar = rendered.some((c) => c.includes('GLOBAL_VALUE_XYZ'));
+    expect(hasVar).toBe(true);
+
+    // The raw marker must not remain in the output
+    expect(rendered.every((c) => !c.includes('{{custom_global_var}}'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration test: BuildConfig.partials (WP-008 AC-2)
+// ---------------------------------------------------------------------------
+
+describe('build() integration — BuildConfig.partials (WP-008 AC-2)', () => {
+  const INTEGRATION_SUITE_DIR = path.join(FIXTURES_ROOT, 'integration-suite');
+  const WP008_BASE = path.join(OUT_ROOT, 'wp008-config-partials');
+
+  it('{{> partialName}} is resolved to expected content from BuildConfig.partials', async () => {
+    const outVscode = path.join(WP008_BASE, 'vscode');
+
+    const config: BuildConfig = {
+      suites: {
+        integration: {
+          srcDir: INTEGRATION_SUITE_DIR,
+          outputDirs: { vscode: outVscode },
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+      variables: { custom_global_var: 'some-value' },
+      partials: {
+        dynamic_partial: 'Config-level partial content for WP-008 AC-2.',
+      },
+    };
+
+    const summary = await build(config);
+
+    expect(summary.success).toBe(true);
+
+    const rendered = summary.results.map((r) => r.content);
+    // The partial content must appear in at least one persona's output
+    const hasPartial = rendered.some((c) =>
+      c.includes('Config-level partial content for WP-008 AC-2.'),
+    );
+    expect(hasPartial).toBe(true);
+
+    // The raw partial marker must not remain in any output
+    expect(rendered.every((c) => !c.includes('{{> dynamic_partial}}'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration test: onPartials plugin hook (WP-008 AC-3)
+// ---------------------------------------------------------------------------
+
+describe('build() integration — onPartials plugin (WP-008 AC-3)', () => {
+  const INTEGRATION_SUITE_DIR = path.join(FIXTURES_ROOT, 'integration-suite');
+  const WP008_BASE = path.join(OUT_ROOT, 'wp008-on-partials');
+
+  it('partial injected by onPartials plugin appears in rendered output', async () => {
+    const outVscode = path.join(WP008_BASE, 'vscode');
+
+    const onPartialsPlugin: PersonaBuildPlugin = {
+      name: 'on-partials-test-plugin',
+      onPartials(partialsMap) {
+        return {
+          ...partialsMap,
+          dynamic_partial: 'Injected by onPartials plugin — WP-008 AC-3.',
+        };
+      },
+    };
+
+    const config: BuildConfig = {
+      suites: {
+        integration: {
+          srcDir: INTEGRATION_SUITE_DIR,
+          outputDirs: { vscode: outVscode },
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+      variables: { custom_global_var: 'some-value' },
+      plugins: [onPartialsPlugin],
+    };
+
+    const summary = await build(config);
+
+    expect(summary.success).toBe(true);
+
+    const rendered = summary.results.map((r) => r.content);
+    // The plugin-injected partial must appear in at least one persona
+    const hasInjected = rendered.some((c) =>
+      c.includes('Injected by onPartials plugin — WP-008 AC-3.'),
+    );
+    expect(hasInjected).toBe(true);
+
+    // The raw partial marker must not remain in any output
+    expect(rendered.every((c) => !c.includes('{{> dynamic_partial}}'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration test: onPersonaPartials plugin + per-persona isolation (WP-008 AC-4 & AC-5)
+// ---------------------------------------------------------------------------
+
+describe('build() integration — onPersonaPartials plugin + isolation (WP-008 AC-4 & AC-5)', () => {
+  const INTEGRATION_SUITE_DIR = path.join(FIXTURES_ROOT, 'integration-suite');
+  const WP008_BASE = path.join(OUT_ROOT, 'wp008-on-persona-partials');
+
+  it('onPersonaPartials returns different content per persona, and each persona contains its unique partial', async () => {
+    const outVscode = path.join(WP008_BASE, 'vscode');
+
+    const onPersonaPartialsPlugin: PersonaBuildPlugin = {
+      name: 'on-persona-partials-test-plugin',
+      onPersonaPartials(partialsMap, persona) {
+        // Return a unique partial value per persona, keyed by the persona's name
+        const uniqueContent = `Unique partial for ${persona.name} — WP-008 AC-4.`;
+        return { ...partialsMap, dynamic_partial: uniqueContent };
+      },
+    };
+
+    const config: BuildConfig = {
+      suites: {
+        integration: {
+          srcDir: INTEGRATION_SUITE_DIR,
+          outputDirs: { vscode: outVscode },
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+      variables: { custom_global_var: 'some-value' },
+      plugins: [onPersonaPartialsPlugin],
+    };
+
+    const summary = await build(config);
+
+    expect(summary.success).toBe(true);
+    // Two personas × one target = two results
+    expect(summary.totalBuilt).toBe(2);
+
+    const alphaResult = summary.results.find((r) =>
+      r.content.includes('Persona Alpha'),
+    );
+    const betaResult = summary.results.find((r) =>
+      r.content.includes('Persona Beta'),
+    );
+
+    expect(alphaResult).toBeDefined();
+    expect(betaResult).toBeDefined();
+
+    // AC-4: each persona's output contains its own unique partial content
+    expect(alphaResult!.content).toContain('Unique partial for Persona Alpha — WP-008 AC-4.');
+    expect(betaResult!.content).toContain('Unique partial for Persona Beta — WP-008 AC-4.');
+
+    // AC-5: persona A's partial does NOT appear in persona B's output (and vice versa)
+    expect(alphaResult!.content).not.toContain('Unique partial for Persona Beta — WP-008 AC-4.');
+    expect(betaResult!.content).not.toContain('Unique partial for Persona Alpha — WP-008 AC-4.');
+  });
+
+  it('per-persona partial mutation does not leak to other personas (isolation)', async () => {
+    const outVscode = path.join(WP008_BASE, 'isolation', 'vscode');
+
+    // This plugin mutates its received map in place — the builder's shallow copy
+    // must prevent the mutation from leaking to other personas.
+    const mutatingPlugin: PersonaBuildPlugin = {
+      name: 'mutating-plugin',
+      onPersonaPartials(partialsMap, persona) {
+        // Intentionally mutate in place (to verify the builder isolates correctly)
+        partialsMap['dynamic_partial'] = `Mutated for ${persona.name}`;
+        return partialsMap;
+      },
+    };
+
+    const config: BuildConfig = {
+      suites: {
+        integration: {
+          srcDir: INTEGRATION_SUITE_DIR,
+          outputDirs: { vscode: outVscode },
+        },
+      },
+      targets: ['vscode'],
+      check: true,
+      variables: { custom_global_var: 'some-value' },
+      plugins: [mutatingPlugin],
+    };
+
+    const summary = await build(config);
+
+    expect(summary.success).toBe(true);
+    expect(summary.totalBuilt).toBe(2);
+
+    const alphaResult = summary.results.find((r) => r.content.includes('Persona Alpha'));
+    const betaResult = summary.results.find((r) => r.content.includes('Persona Beta'));
+
+    expect(alphaResult).toBeDefined();
+    expect(betaResult).toBeDefined();
+
+    // Each persona must contain its own mutated partial — not the other's
+    expect(alphaResult!.content).toContain('Mutated for Persona Alpha');
+    expect(betaResult!.content).toContain('Mutated for Persona Beta');
+
+    expect(alphaResult!.content).not.toContain('Mutated for Persona Beta');
+    expect(betaResult!.content).not.toContain('Mutated for Persona Alpha');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Integration test: custom target with outputDirKey !== name (rework-1 step 3)
 // ---------------------------------------------------------------------------
 

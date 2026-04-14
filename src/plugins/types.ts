@@ -117,6 +117,27 @@ export interface SuiteConfig {
   metaSubdir?: string;
   /** Sub-directory within srcDir that contains content Markdown files. Default: 'content' */
   contentSubdir?: string;
+
+  /**
+   * Optional map of suite-level template variables.
+   *
+   * These form the **second-lowest** layer (layer 2 of 7) in the merge chain
+   * used by `buildContext()`:
+   *
+   *   1. `BuildConfig.variables`   — global defaults (lowest priority)
+   *   2. `SuiteConfig.variables`   ← this field
+   *   3. `_shared.yaml` fields     — shared metadata
+   *   4. Per-persona YAML fields   — per-persona metadata
+   *   5. Derived fields            — version fallback, tools serialisation, etc.
+   *   6. Cross-suite agent map     — `agent_<slug>` entries
+   *   7. Target flags              — `target_<name>` booleans (highest priority)
+   *
+   * Suite variables override any same-named entry in `BuildConfig.variables`,
+   * but are themselves overridden by `_shared.yaml` fields and per-persona
+   * YAML metadata. Use this field to inject suite-scoped defaults that apply
+   * to every persona in the suite without modifying shared YAML files.
+   */
+  variables?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,10 +166,12 @@ export interface ValidationResult {
  * identification.
  *
  * Hook invocation order (per persona):
- *   1. onSuiteInit   — once per suite, before any persona is built
- *   2. onBuildContext — per persona, before template rendering
- *   3. onPostRender   — per persona, after body rendering
- *   4. onValidate     — per persona, during the validation phase
+ *   1. onSuiteInit      — once per suite, before any persona is built
+ *   2. onPartials       — once per suite, after partials are loaded
+ *   3. onBuildContext   — per persona, before template rendering
+ *   4. onPersonaPartials — per persona, before template rendering (after onBuildContext)
+ *   5. onPostRender     — per persona, after body rendering
+ *   6. onValidate       — per persona, during the validation phase
  */
 export interface PersonaBuildPlugin {
   /**
@@ -168,6 +191,26 @@ export interface PersonaBuildPlugin {
   onSuiteInit?(suite: SuiteConfig, sharedMeta: Record<string, unknown>): void;
 
   /**
+   * Called once per suite after partials are loaded from disk (and after any
+   * `BuildConfig.partials` inline map has been applied), but before any persona
+   * is rendered.
+   *
+   * Plugins are chained: each plugin receives the accumulated partials map
+   * returned by the previous plugin. Return the (possibly mutated or extended)
+   * map to pass it to the next plugin.
+   *
+   * @param partialsMap The current map of partial name → partial content
+   * @param suiteName   The identifier of the current suite
+   * @param suite       The suite configuration object
+   * @returns           Updated partials map (must include all original keys)
+   */
+  onPartials?(
+    partialsMap: Record<string, string>,
+    suiteName: string,
+    suite: SuiteConfig,
+  ): Record<string, string>;
+
+  /**
    * Called for each persona before template rendering.
    *
    * Receives the current rendering context and must return a (possibly mutated)
@@ -185,6 +228,41 @@ export interface PersonaBuildPlugin {
     suite: SuiteConfig,
     target?: TargetType,
   ): Record<string, unknown>;
+
+  /**
+   * Called for each persona (and target) after `onBuildContext`, before
+   * template rendering.
+   *
+   * Allows plugins to inject or override partials on a per-persona basis.
+   * Plugins are chained: each plugin receives the accumulated partials map
+   * returned by the previous plugin. Return the (possibly mutated or extended)
+   * map to pass it to the next plugin.
+   *
+   * **Isolation guarantee:** The builder creates a shallow copy of the
+   * suite-level partials map before invoking the first plugin in the chain.
+   * The `partialsMap` argument you receive is already persona-scoped — changes
+   * to it (or to the map you return) are invisible to other personas in the
+   * same suite.  Do **not** mutate `partialsMap` in place; instead, return a
+   * new map (e.g. `{ ...partialsMap, myPartial: '...' }`) so that each plugin
+   * in the chain receives an independent copy of the previous plugin's output.
+   *
+   * @param partialsMap The current persona-scoped map of partial name → content
+   *                    (a shallow copy of the suite-level map, isolated per persona)
+   * @param persona     Typed metadata for the persona being built
+   * @param context     The post-`onBuildContext` rendering context; persona
+   *                    metadata and any context keys injected by `onBuildContext`
+   *                    plugins are accessible here
+   * @param suite       The suite configuration object
+   * @param target      The current build target (optional)
+   * @returns           Updated partials map (must include all original keys)
+   */
+  onPersonaPartials?(
+    partialsMap: Record<string, string>,
+    persona: PersonaMetadata,
+    context: Record<string, unknown>,
+    suite: SuiteConfig,
+    target?: TargetType,
+  ): Record<string, string>;
 
   /**
    * Called for each persona after body rendering.

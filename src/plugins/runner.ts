@@ -7,8 +7,9 @@
  * PersonaBuildPlugin. The runner:
  *   - Skips plugins that do not implement the requested hook (hook is optional)
  *   - Invokes hooks in the order plugins are registered (first-in first-called)
- *   - For accumulating hooks (onBuildContext, onPostRender), each plugin
- *     receives the output of the previous plugin as its first argument
+ *   - For accumulating hooks (onBuildContext, onPartials, onPersonaPartials,
+ *     onPostRender), each plugin receives the output of the previous plugin
+ *     as its first argument
  *   - For collecting hooks (onValidate), results are concatenated into a
  *     flat array
  *
@@ -80,7 +81,7 @@ export function runBuildContext(
   let accumulated = ctx;
   for (const plugin of plugins) {
     if (typeof plugin.onBuildContext === 'function') {
-      accumulated = plugin.onBuildContext(accumulated, persona, suite, target);
+      accumulated = plugin.onBuildContext(accumulated, persona, suite, target) ?? accumulated;
     }
   }
   return accumulated;
@@ -113,10 +114,86 @@ export function runPostRender(
   let output = rendered;
   for (const plugin of plugins) {
     if (typeof plugin.onPostRender === 'function') {
-      output = plugin.onPostRender(output, persona, target);
+      output = plugin.onPostRender(output, persona, target) ?? output;
     }
   }
   return output;
+}
+
+// ---------------------------------------------------------------------------
+// Suite-level partials accumulation
+// ---------------------------------------------------------------------------
+
+/**
+ * Invoke the `onPartials` hook on every registered plugin, accumulating
+ * partials map mutations sequentially.
+ *
+ * Each plugin receives the partials map returned by the previous plugin. If a
+ * plugin does not implement `onPartials`, the map passes through unchanged.
+ * The final accumulated map is returned.
+ *
+ * Called once per suite after partials are loaded from disk, before any
+ * persona is rendered.
+ *
+ * @param plugins     Ordered list of registered plugins
+ * @param partialsMap Initial map of partial name → partial content
+ * @param suiteName   The identifier of the current suite
+ * @param suite       The suite configuration object
+ * @returns           Accumulated partials map after all plugins have run
+ */
+export function runPartials(
+  plugins: PersonaBuildPlugin[],
+  partialsMap: Record<string, string>,
+  suiteName: string,
+  suite: SuiteConfig,
+): Record<string, string> {
+  let accumulated = partialsMap;
+  for (const plugin of plugins) {
+    if (typeof plugin.onPartials === 'function') {
+      accumulated = plugin.onPartials(accumulated, suiteName, suite) ?? accumulated;
+    }
+  }
+  return accumulated;
+}
+
+// ---------------------------------------------------------------------------
+// Per-persona partials accumulation
+// ---------------------------------------------------------------------------
+
+/**
+ * Invoke the `onPersonaPartials` hook on every registered plugin, accumulating
+ * partials map mutations sequentially.
+ *
+ * Each plugin receives the partials map returned by the previous plugin. If a
+ * plugin does not implement `onPersonaPartials`, the map passes through
+ * unchanged. The final accumulated map is returned.
+ *
+ * Called for each persona (and target) after `onBuildContext`, before
+ * template rendering.
+ *
+ * @param plugins     Ordered list of registered plugins
+ * @param partialsMap Initial map of partial name → partial content
+ * @param persona     Typed metadata for the persona being built
+ * @param context     The rendering context built by `onBuildContext`
+ * @param suite       The suite configuration object
+ * @param target      The current build target (optional)
+ * @returns           Accumulated partials map after all plugins have run
+ */
+export function runPersonaPartials(
+  plugins: PersonaBuildPlugin[],
+  partialsMap: Record<string, string>,
+  persona: PersonaMetadata,
+  context: Record<string, unknown>,
+  suite: SuiteConfig,
+  target?: TargetType,
+): Record<string, string> {
+  let accumulated = partialsMap;
+  for (const plugin of plugins) {
+    if (typeof plugin.onPersonaPartials === 'function') {
+      accumulated = plugin.onPersonaPartials(accumulated, persona, context, suite, target) ?? accumulated;
+    }
+  }
+  return accumulated;
 }
 
 // ---------------------------------------------------------------------------

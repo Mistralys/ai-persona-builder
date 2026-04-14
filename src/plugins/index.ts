@@ -15,7 +15,9 @@ export type {
 
 export {
   runSuiteInit,
+  runPartials,
   runBuildContext,
+  runPersonaPartials,
   runPostRender,
   runValidate,
 } from './runner.js';

@@ -61,6 +61,28 @@ describe('resolvePartials()', () => {
     expect(result).toBe('{{> c}}');
   });
 
+  /**
+   * CONSTRAINT: The nesting depth cap is fixed at 2 and is NOT configurable.
+   *
+   * Decision (2026-04-14): Evaluated making the cap configurable via a
+   * `maxPartialDepth` option in BuildConfig. Decision: no change. Depth 2
+   * supports the full "outer → inner → innermost" chain, which covers all
+   * practical persona template patterns. Raising or making the cap configurable
+   * adds API surface and complexity with no demonstrated need.
+   *
+   * This test documents the constraint explicitly. If you need to change the
+   * depth cap in the future, this test is the contract to update first.
+   */
+  it('depth-2 cap is a fixed constraint — 2-level nesting resolves fully, 3-level leaves deepest marker', () => {
+    // 2-level nesting resolves completely (depth 0 → 1 → 2: stops before resolving c)
+    const two = { outer: '{{> inner}}', inner: 'resolved' };
+    expect(resolvePartials('{{> outer}}', two)).toBe('resolved');
+
+    // 3-level nesting: the third-level marker is left unresolved
+    const three = { a: '{{> b}}', b: '{{> c}}', c: 'deep' };
+    expect(resolvePartials('{{> a}}', three)).toBe('{{> c}}');
+  });
+
   // ---------------------------------------------------------------------------
   // Missing partials
   // ---------------------------------------------------------------------------

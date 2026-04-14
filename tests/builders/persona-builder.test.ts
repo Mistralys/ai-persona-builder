@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { buildPersona, buildSuite, build } from '../../src/builders/persona-builder.js';
 import type { BuildConfig } from '../../src/builders/types.js';
 import type { PersonaBuildPlugin, SuiteConfig } from '../../src/plugins/types.js';
+import { createMinimalSuite } from '../helpers/suite-fixture.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures directory (from the project root)
@@ -70,51 +71,6 @@ afterEach(async () => {
   const outDir = path.join(FIXTURES_ROOT, 'out');
   await rm(outDir, { recursive: true, force: true });
 });
-
-// ---------------------------------------------------------------------------
-// Helper: build a minimal suite directory in a temp folder
-// ---------------------------------------------------------------------------
-
-async function createMinimalSuite(
-  baseDir: string,
-  opts: {
-    sharedYaml?: string;
-    personaYaml?: string;
-    contentMd?: string;
-    personaName?: string;
-  } = {},
-): Promise<{ suiteDir: string; outDir: string }> {
-  const suiteDir = path.join(baseDir, 'my-suite');
-  const outDir = path.join(baseDir, 'out');
-
-  await mkdir(path.join(suiteDir, 'meta'), { recursive: true });
-  await mkdir(path.join(suiteDir, 'content'), { recursive: true });
-  await mkdir(path.join(suiteDir, 'partials'), { recursive: true });
-
-  const pName = opts.personaName ?? 'test-persona';
-
-  // _shared.yaml
-  await writeFile(
-    path.join(suiteDir, 'meta', '_shared.yaml'),
-    opts.sharedYaml ??
-      `default_version: '2.0.0'\nauthor: test-author\nlast_updated: '2026-01-01'\ncc_permission_mode: default\ncc_model: claude-opus-4-5\ncc_memory: project\n`,
-  );
-
-  // per-persona YAML
-  await writeFile(
-    path.join(suiteDir, 'meta', `${pName}.yaml`),
-    opts.personaYaml ??
-      `name: Test Persona\ndescription: A test persona.\nvs_file_name: ${pName}.agent.md\ncc_file_name: ${pName}.md\ntools:\n  - read\n`,
-  );
-
-  // content template
-  await writeFile(
-    path.join(suiteDir, 'content', `${pName}.md`),
-    opts.contentMd ?? `# {{name}}\n\n{{description}}\n`,
-  );
-
-  return { suiteDir, outDir };
-}
 
 // ---------------------------------------------------------------------------
 // buildPersona() — AC-1
@@ -217,8 +173,8 @@ describe('buildPersona() — AC-1', () => {
   });
 
   it('does not write a file when check mode is enabled', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
-    const personaYamlPath = path.join(suiteDir, 'meta', 'test-persona.yaml');
+    const { suiteDir, outDir, yamlPath } = await createMinimalSuite(testTmpDir);
+    const personaYamlPath = yamlPath;
 
     const suiteConfig: SuiteConfig = {
       srcDir: suiteDir,
@@ -243,20 +199,16 @@ describe('buildPersona() — AC-1', () => {
     );
 
     expect(result.written).toBe(false);
-    expect(existsSync(path.join(outDir, 'vscode', 'test-persona.agent.md'))).toBe(false);
+    expect(existsSync(path.join(outDir, 'vscode', 'agent.agent.md'))).toBe(false);
     // Content is still rendered
-    expect(result.content).toContain('Test Persona');
+    expect(result.content).toContain('Test Agent');
   });
 
   it('runs plugin onBuildContext hook and uses the mutated context', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
-    const personaYamlPath = path.join(suiteDir, 'meta', 'test-persona.yaml');
-
-    // Custom content template that uses a plugin-injected variable
-    await writeFile(
-      path.join(suiteDir, 'content', 'test-persona.md'),
-      '# {{name}}\n\nInjected: {{plugin_value}}\n',
-    );
+    const { suiteDir, outDir, yamlPath } = await createMinimalSuite(testTmpDir, {
+      contentMd: '# {{name}}\n\nInjected: {{plugin_value}}\n',
+    });
+    const personaYamlPath = yamlPath;
 
     const plugin: PersonaBuildPlugin = {
       name: 'context-injector',
@@ -291,8 +243,8 @@ describe('buildPersona() — AC-1', () => {
   });
 
   it('runs plugin onPostRender hook and uses the mutated output', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
-    const personaYamlPath = path.join(suiteDir, 'meta', 'test-persona.yaml');
+    const { suiteDir, outDir, yamlPath } = await createMinimalSuite(testTmpDir);
+    const personaYamlPath = yamlPath;
 
     const plugin: PersonaBuildPlugin = {
       name: 'post-render-suffix',
@@ -327,8 +279,8 @@ describe('buildPersona() — AC-1', () => {
   });
 
   it('collects ValidationResults from plugin onValidate hook', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
-    const personaYamlPath = path.join(suiteDir, 'meta', 'test-persona.yaml');
+    const { suiteDir, outDir, yamlPath } = await createMinimalSuite(testTmpDir);
+    const personaYamlPath = yamlPath;
 
     const plugin: PersonaBuildPlugin = {
       name: 'validator',
@@ -368,8 +320,8 @@ describe('buildPersona() — AC-1', () => {
   });
 
   it('uses plugin frontmatterTemplates when provided', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
-    const personaYamlPath = path.join(suiteDir, 'meta', 'test-persona.yaml');
+    const { suiteDir, outDir, yamlPath } = await createMinimalSuite(testTmpDir);
+    const personaYamlPath = yamlPath;
 
     const customTemplate = `---\ncustom: true\nname: {{name}}\n---`;
 
@@ -402,7 +354,7 @@ describe('buildPersona() — AC-1', () => {
     );
 
     expect(result.content).toContain('custom: true');
-    expect(result.content).toContain('name: Test Persona');
+    expect(result.content).toContain('name: Test Agent');
   });
 });
 
@@ -515,14 +467,10 @@ describe('buildSuite() — AC-2', () => {
   });
 
   it('loads shared partials and suite-local partials', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir, {
+    const { suiteDir, outDir, sharedPartialsDir } = await createMinimalSuite(testTmpDir, {
       contentMd: '{{> greeting}}\n\n# {{name}}\n',
+      sharedPartials: { greeting: 'Hello from shared!' },
     });
-
-    // Create a shared partials dir with a greeting partial
-    const sharedPartialsDir = path.join(testTmpDir, 'shared', 'partials');
-    await mkdir(sharedPartialsDir, { recursive: true });
-    await writeFile(path.join(sharedPartialsDir, 'greeting.md'), 'Hello from shared!');
 
     const suiteConfig: SuiteConfig = {
       srcDir: suiteDir,
@@ -543,17 +491,11 @@ describe('buildSuite() — AC-2', () => {
   });
 
   it('suite-local partials override shared partials of the same name', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir, {
+    const { suiteDir, outDir, sharedPartialsDir } = await createMinimalSuite(testTmpDir, {
       contentMd: '{{> greeting}}\n\n# {{name}}\n',
+      sharedPartials: { greeting: 'Hello from shared!' },
+      suitePartials: { greeting: 'Hello from suite-local!' },
     });
-
-    // Shared partial
-    const sharedPartialsDir = path.join(testTmpDir, 'shared', 'partials');
-    await mkdir(sharedPartialsDir, { recursive: true });
-    await writeFile(path.join(sharedPartialsDir, 'greeting.md'), 'Hello from shared!');
-
-    // Suite-local override
-    await writeFile(path.join(suiteDir, 'partials', 'greeting.md'), 'Hello from suite-local!');
 
     const suiteConfig: SuiteConfig = {
       srcDir: suiteDir,

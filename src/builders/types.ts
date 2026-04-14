@@ -39,9 +39,19 @@ export interface BuildConfig {
   suites: Record<string, SuiteConfig>;
 
   /**
-   * Absolute path to the shared partials directory. When provided, partials
-   * from this directory are loaded as the base layer before suite-local
-   * partials are overlaid. Optional.
+   * Absolute path to the shared partials directory.
+   *
+   * When provided, partials from this directory form the **second** layer in
+   * the five-layer partials resolution order:
+   *
+   *   1. `BuildConfig.partials`  — lowest precedence (inline map)
+   *   2. `sharedPartialsDir`     — overlaid on top of inline partials (this field)
+   *   3. Suite-local partials    — overlaid on top of shared partials
+   *   4. `onPartials` hooks      — suite-level plugin-injected partials
+   *   5. `onPersonaPartials`     — per-persona overrides (highest precedence)
+   *
+   * Later layers overlay earlier ones; a key present in multiple layers uses
+   * the value from the highest-precedence layer.
    */
   sharedPartialsDir?: string;
 
@@ -93,6 +103,45 @@ export interface BuildConfig {
    * `TargetDefinition.defaultFrontmatter` are used.
    */
   frontmatter?: Record<string, string>;
+
+  /**
+   * Optional map of global template variables made available to every persona
+   * during rendering.
+   *
+   * These form the **lowest-priority** layer (layer 1 of 7) in the merge chain
+   * used by `buildContext()`:
+   *
+   *   1. `BuildConfig.variables`   ← this field (lowest priority)
+   *   2. `SuiteConfig.variables`   — suite-level overrides
+   *   3. `_shared.yaml` fields     — shared metadata
+   *   4. Per-persona YAML fields   — per-persona metadata
+   *   5. Derived fields            — version fallback, tools serialisation, etc.
+   *   6. Cross-suite agent map     — `agent_<slug>` entries
+   *   7. Target flags              — `target_<name>` booleans (highest priority)
+   *
+   * Any key set here that also appears in a higher-priority layer will be
+   * overridden. Use this field for project-wide defaults that individual suites
+   * or personas can selectively override via `SuiteConfig.variables` or their
+   * own YAML metadata.
+   */
+  variables?: Record<string, unknown>;
+
+  /**
+   * Optional map of inline partials, keyed by partial name.
+   *
+   * These form the **lowest** layer in the five-layer partials resolution
+   * order:
+   *
+   *   1. `BuildConfig.partials`  — lowest precedence (this field)
+   *   2. `sharedPartialsDir`     — overlaid on top of inline partials
+   *   3. Suite-local partials    — overlaid on top of shared partials
+   *   4. `onPartials` hooks      — suite-level plugin-injected partials
+   *   5. `onPersonaPartials`     — per-persona overrides (highest precedence)
+   *
+   * Later layers overlay earlier ones; a key present in multiple layers uses
+   * the value from the highest-precedence layer.
+   */
+  partials?: Record<string, string>;
 
   /**
    * Optional target registry to use for this build.
