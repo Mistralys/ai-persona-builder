@@ -10,6 +10,8 @@ Define your personas once as simple YAML + Markdown sources, and the library gen
 - **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, and context flags
 - **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, and `{{#if}}` conditionals
 - **Shared + per-suite partials** — reuse content fragments across personas with local overrides
+- **Custom variables** — inject global or per-suite template variables via `BuildConfig.variables` and `SuiteConfig.variables` without touching persona YAML files
+- **Dynamic partials** — supply inline partials via `BuildConfig.partials`, or override them at suite or per-persona level through the `onPartials` and `onPersonaPartials` plugin hooks
 - **Plugin architecture** — hook into context building, post-rendering, validation, and frontmatter generation
 - **CI-friendly** — `--check` mode renders without writing; `--strict` exits non-zero on warnings
 - **Programmatic & CLI** — use the `build()` API in scripts or run `persona-build` from the command line
@@ -71,6 +73,7 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Getting Started](docs/getting-started.md) | Step-by-step tutorial — build your first persona from scratch |
 | [Directory Convention](docs/directory-convention.md) | Expected source layout (`meta/`, `content/`, `partials/`) |
 | [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, and built-in context variables |
+| [Custom Variables & Dynamic Partials](docs/dynamic-partials.md) | Inject build-time variables and partial content at global, suite, or per-persona level |
 | [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface and examples |
 
 **Reference** — look-up material:
