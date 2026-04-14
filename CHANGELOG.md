@@ -3,18 +3,13 @@
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
 ## v2.4.0 - Dynamic Partials
-- Builder: Added `BuildConfig.partials` inline partials map as the lowest-precedence layer.
-- Builder: Added `BuildConfig.variables` global template variables as lowest-priority context layer.
-- Builder: Added `SuiteConfig.variables` suite-scoped template variables for per-suite defaults.
-- Builder: Extended partials resolution to a five-layer stack with documented precedence order.
-- Builder: Extended context merge chain to a seven-layer stack with documented precedence order.
-- Plugins: Added `onPartials` hook for suite-level dynamic partial injection after disk load.
-- Plugins: Added `onPersonaPartials` hook for per-persona partial overrides before rendering.
-- Tests: Added four new test suites covering partials config, suite variables, and persona hooks.
-- Tests: Added integration-suite fixture set for multi-persona test scenarios.
-- Docs: Added dynamic partials guide and plugins guide.
-- Docs: Updated configuration, directory-convention, and template-syntax guides.
-- Docs: Updated project manifest for new API surface, constraints, and data flows.
+- Builder: Added `BuildConfig.partials` inline partials map as lowest-precedence layer.
+- Builder: Added global `BuildConfig.variables` and per-suite `SuiteConfig.variables` template maps.
+- Builder: Extended partials to a five-layer stack; context merge to a seven-layer stack.
+- Plugins: Added `onPartials` hook for suite-level partial injection after disk load.
+- Plugins: Added `onPersonaPartials` hook for per-persona partial overrides.
+- Tests: Added suites for partials config, suite variables, persona hooks, and integration.
+- Docs: Added dynamic partials and plugins guides; updated configuration and template-syntax docs.
 - Agents: Added release-check skill.
 
 ## v2.3.0 - Else-If Chain Support
