@@ -144,6 +144,14 @@ Unclear → Pause and request user clarification
 
 ---
 
+## 🎯 Skills
+
+| Skill | File | Use When |
+|-------|------|----------|
+| `release-check` | [`.github/skills/release-check/SKILL.md`](.github/skills/release-check/SKILL.md) | Verifying the project is ready for `npm version` and `npm publish`. |
+
+---
+
 ## 🛠️ Contributor Guide
 
 ### Repo Layout
@@ -242,3 +250,4 @@ Produces dual CJS + ESM output via tsup into `dist/`. Two entry points are compi
 | See test fixtures | `fixtures/sample-suite/` and `fixtures/shared/` |
 | Run tests | `npm test` |
 | Build the library | `npm run build` |
+| Check release readiness | [`.github/skills/release-check/SKILL.md`](.github/skills/release-check/SKILL.md) |
