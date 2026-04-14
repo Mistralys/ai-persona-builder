@@ -67,6 +67,15 @@ can reference any context variable.
 Suite-local partials override shared partials with the same stem name. They are only
 available inside the suite that defines them.
 
+> **Partials resolution order (five layers):**
+> 1. `BuildConfig.partials` — inline partial map (lowest precedence)
+> 2. `sharedPartialsDir` — shared cross-suite partials loaded from disk
+> 3. Suite-local partials — files in `<srcDir>/partials/` (this directory)
+> 4. `onPartials` plugin hooks — plugin-injected partials (suite-level, highest file-based priority)
+> 5. `onPersonaPartials` plugin hooks — per-persona overrides (highest precedence of all)
+>
+> See [Custom Variables & Dynamic Partials](dynamic-partials.md) for the full reference.
+
 ---
 
 ## 5. Write the shared defaults

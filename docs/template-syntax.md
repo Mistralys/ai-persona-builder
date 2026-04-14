@@ -8,7 +8,17 @@ Templates use a lightweight `{{…}}` syntax with no external dependencies.
 {{variableName}}
 ```
 
-Values are sourced from the merged context (shared YAML + per-persona YAML + plugin `onBuildContext`). Missing variables emit a warning to stderr but do not fail the build.
+Values are sourced from the merged context built in this priority order (later layers win):
+
+1. `BuildConfig.variables` — global defaults set in your top-level config
+2. `SuiteConfig.variables` — suite-level overrides
+3. `_shared.yaml` fields
+4. Per-persona YAML fields
+5. Derived/computed fields (e.g. `version`, `tools_list`)
+6. Cross-suite agent map (`agent_<slug>` variables)
+7. Target flags (`target_<name>` booleans) — always highest priority
+
+Plugin `onBuildContext` hooks run after step 4 and may contribute additional keys or override existing ones. Missing variables emit a warning to stderr but do not fail the build.
 
 ## Partials
 

@@ -7,7 +7,9 @@ The configuration object passed to `build()`.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `suites` | `Record<string, SuiteConfig>` | **required** | Map of suite names to suite configurations. |
-| `sharedPartialsDir` | `string` | `undefined` | Absolute path to a shared partials directory. Partials here are loaded as the base layer; suite-local partials overlay them. |
+| `sharedPartialsDir` | `string` | `undefined` | Absolute path to a shared partials directory. Forms layer 2 in the five-layer partial resolution order: `BuildConfig.partials` (lowest) → `sharedPartialsDir` → suite-local partials → `onPartials` plugin hooks → `onPersonaPartials` plugin hooks (highest). See [Custom Variables & Dynamic Partials](dynamic-partials.md). |
+| `partials` | `Record<string, string>` | `undefined` | Inline partials map (partial name → content). Forms the **lowest** layer (layer 1) in the five-layer partial resolution order: `BuildConfig.partials` (lowest) → `sharedPartialsDir` → suite-local partials → `onPartials` plugin hooks → `onPersonaPartials` plugin hooks (highest). Useful for injecting programmatically generated content without touching the filesystem. See also [Custom Variables & Dynamic Partials](dynamic-partials.md). |
+| `variables` | `Record<string, unknown>` | `undefined` | Global template variables available to every persona during rendering. Forms layer 1 (lowest priority) of the 7-layer merge chain: `BuildConfig.variables` → `SuiteConfig.variables` → `_shared.yaml` → per-persona YAML → derived fields → agent map → target flags. Suite-level `SuiteConfig.variables` are merged on top of these and take precedence when the same key appears in both. |
 | `plugins` | `PersonaBuildPlugin[]` | `[]` | Plugins applied to every suite in registration order. |
 | `targets` | `string[]` | See below | Output targets to generate. The default is derived from the registry: all targets where `defaultEnabled !== false`. For `defaultRegistry`, this yields `['vscode', 'claude-code']` (the `'deep-agents'` target has `defaultEnabled: false`). Pass an explicit array to override. |
 | `check` | `boolean` | `false` | When `true`, personas are rendered but **no files are written**. Useful for CI staleness checks. |
@@ -29,6 +31,7 @@ Per-suite configuration nested inside `BuildConfig.suites`.
 | `partialsSubdir` | `string` | `'partials'` | Sub-directory within `srcDir` containing suite-local partials. |
 | `metaSubdir` | `string` | `'meta'` | Sub-directory within `srcDir` containing YAML metadata files. |
 | `contentSubdir` | `string` | `'content'` | Sub-directory within `srcDir` containing Markdown content templates. |
+| `variables` | `Record<string, unknown>` | `undefined` | Suite-level template variables. Forms layer 2 of the 7-layer merge chain: `BuildConfig.variables` → `SuiteConfig.variables` → `_shared.yaml` → per-persona YAML → derived fields → agent map → target flags. Overrides `BuildConfig.variables` for the same key; itself overridden by `_shared.yaml` and per-persona YAML fields. |
 
 > **`outputDirs` key note:** Each key in `outputDirs` must match the target's `outputDirKey` field (declared in its `TargetDefinition`), **not** necessarily the target name. For the three built-in targets `outputDirKey` equals the target name (`'vscode'`, `'claude-code'`, `'deep-agents'`), so there is no difference in practice. For a custom target where `outputDirKey` differs from `name`, use the `outputDirKey` value as the map key.
 
