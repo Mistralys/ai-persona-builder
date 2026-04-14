@@ -56,7 +56,7 @@
 │
 ├── tests/
 │   ├── README.md                   # Test suite documentation
-│   ├── engine/                     # Engine module tests (74 tests)
+│   ├── engine/                     # Engine module tests (90 tests)
 │   │   ├── partials.test.ts
 │   │   ├── conditionals.test.ts
 │   │   ├── variables.test.ts
@@ -66,18 +66,24 @@
 │   │   ├── partials-loader.test.ts
 │   │   ├── metadata-loader.test.ts
 │   │   └── content-loader.test.ts
-│   ├── plugins/                    # Plugin system tests (27 tests)
-│   │   └── plugin-runner.test.ts
-│   ├── targets/                    # Target registry tests (29 tests)
+│   ├── plugins/                    # Plugin system tests (46 tests)
+│   │   └── plugin-runner.test.ts   # runSuiteInit, runBuildContext, runPostRender, runValidate, runPartials, runPersonaPartials
+│   ├── targets/                    # Target registry tests (41 tests)
 │   │   └── target-registry.test.ts
-│   ├── builders/                   # Builder tests (40 tests)
+│   ├── builders/                   # Builder tests (125 tests)
 │   │   ├── agent-name-map.test.ts
+│   │   ├── build-config-variables-and-partials.test.ts
+│   │   ├── config-partials-and-on-partials.test.ts
+│   │   ├── config-suite-variables.test.ts
+│   │   ├── da-computed-fields.test.ts
+│   │   ├── on-persona-partials.test.ts
 │   │   ├── persona-builder.test.ts
-│   │   └── persona-builder-edge-cases.test.ts
+│   │   ├── persona-builder-edge-cases.test.ts
+│   │   └── target-variable-injection.test.ts
 │   ├── validators/                 # Validator tests (46 tests)
 │   │   ├── filename-validator.test.ts
 │   │   └── strict-validator.test.ts
-│   └── integration/                # End-to-end integration tests (8 tests)
+│   └── integration/                # End-to-end integration tests (20 tests)
 │       └── build.test.ts
 │
 ├── fixtures/                       # Test fixtures

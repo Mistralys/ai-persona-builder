@@ -10,7 +10,7 @@ All five engine modules (`partials.ts`, `conditionals.ts`, `variables.ts`, `post
 
 ### 2. Synchronous Plugin Runner — plan for async before adding remote plugins
 
-The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All four hook functions (`runSuiteInit`, `runBuildContext`, `runPostRender`, `runValidate`) are synchronous. This is correct for the current use case (local file-based builds).
+The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All six hook functions (`runSuiteInit`, `runPartials`, `runBuildContext`, `runPersonaPartials`, `runPostRender`, `runValidate`) are synchronous. This is correct for the current use case (local file-based builds).
 
 > Before integrating any plugin that performs network I/O or heavy async work (e.g., schema-fetching, API calls), the runner must be refactored to `async` + sequential `await`. Design new plugin hooks with async compatibility in mind.
 
@@ -112,6 +112,12 @@ longer exported by this package. Any code that imports from
 `@mistralys/persona-builder/plugins/ledger` will receive an `ERR_PACKAGE_PATH_NOT_EXPORTED`
 error at runtime.
 
+### 7. Partial Nesting Depth Cap Is Fixed at 2
+
+`resolvePartials()` uses a hardcoded recursion depth cap of `2`. This supports a "partial → nested partial → innermost partial" chain (two levels of nesting), but a third level is **not expanded** — the `{{> name}}` marker is left as-is in the output. This cap is **not configurable** via `BuildConfig` or any other option.
+
+**Decision (2026-04-14):** Making the cap configurable was evaluated and rejected. Depth 2 covers all practical persona template patterns. Adding a `maxPartialDepth` option would increase API surface and complexity with no demonstrated demand. If a third nesting level is required in the future, raise the `depth >= 2` guard in `src/engine/partials.ts` and update the tests in `tests/engine/partials.test.ts`.
+
 ---
 
 ## Directory Convention
@@ -124,20 +130,19 @@ Each suite's `srcDir` must contain three sub-directories (configurable via `Suit
 | `content/` | Markdown content templates | `contentSubdir` |
 | `partials/` | Suite-local reusable content fragments | `partialsSubdir` |
 
-Shared partials (cross-suite) are loaded from `BuildConfig.sharedPartialsDir`. Suite-local partials override shared partials with the same stem name.
+Partials are resolved in five layers of increasing precedence: (1) `BuildConfig.partials` inline map (lowest), (2) shared cross-suite partials from `BuildConfig.sharedPartialsDir`, (3) suite-local partials from `<srcDir>/partials/`, (4) `onPartials` plugin hooks (suite-level, once per suite), (5) `onPersonaPartials` plugin hooks (per-persona, highest — always win). See **Partials Resolution** in `data-flows.md` for the full pipeline.
 
 ---
 
 ## Test Suite
 
-| Directory | Scope | Test Count |
-|-----------|-------|------------|
-| `tests/engine/` | Pure engine functions | 74 |
-| `tests/loaders/` | File I/O loaders | 40 |
-| `tests/plugins/` | Plugin runner | 28 |
-| `tests/builders/` | Build orchestration + edge-cases + agent-name-map | 40 |
-| `tests/validators/` | Validation functions | 46 |
-| `tests/integration/` | End-to-end builds against fixtures | 8 |
-| **Total** | | **236** |
+| Directory | Scope |
+|-----------|-------|
+| `tests/engine/` | Pure engine functions |
+| `tests/loaders/` | File I/O loaders |
+| `tests/plugins/` | Plugin runner (incl. `runPartials` + `runPersonaPartials`) |
+| `tests/builders/` | Build orchestration, variables/partials merge, persona partials isolation |
+| `tests/validators/` | Validation functions |
+| `tests/integration/` | End-to-end builds against fixtures |
 
-All tests use Vitest with `globals: true`. Integration tests operate against the `fixtures/` directory.
+All tests use Vitest with `globals: true`. Run `npm test` for the authoritative count. Integration tests operate against the `fixtures/` directory.

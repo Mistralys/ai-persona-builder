@@ -40,7 +40,7 @@ export async function buildSuite(
 ): Promise<BuildResult[]>;
 ```
 
-Builds all personas in a single suite for a single target. Loads `_shared.yaml`, merges partials, fires `onSuiteInit`, discovers persona YAMLs, and delegates to `buildPersona()`. The optional `agentMap` is forwarded to each persona build.
+Builds all personas in a single suite for a single target. Loads `_shared.yaml`, merges partials, fires `onSuiteInit` and `onPartials` hooks, discovers persona YAMLs, and delegates to `buildPersona()`. The optional `agentMap` is forwarded to each persona build.
 
 **Two-registry limitation:** `registry` defaults to `defaultRegistry`. If you pass a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and call `buildSuite()` directly without the same registry argument, your custom targets will not be visible. Either pass the registry instance explicitly here, or use `build()` to have it forwarded automatically.
 
@@ -61,7 +61,7 @@ export async function buildPersona(
 ): Promise<BuildResult>;
 ```
 
-Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context → plugin hooks → frontmatter → body rendering → post-processing → validation → write.
+Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context (`onBuildContext`) → per-persona partials (`onPersonaPartials`) → frontmatter → body rendering → post-processing (`onPostRender`) → validation (`onValidate`) → write.
 
 **Two-registry limitation:** `registry` defaults to `defaultRegistry`. If you pass a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and call `buildPersona()` directly without the same registry argument, your custom targets will not be visible. Either pass the registry instance explicitly here, or use `build()` to have it forwarded automatically.
 
@@ -391,6 +391,34 @@ Holds `TargetDefinition` entries keyed by name. Preserves insertion order — `n
 
 All runner functions are synchronous.
 
+### `runPartials(plugins, partialsMap, suiteName, suite)`
+
+```ts
+export function runPartials(
+  plugins: PersonaBuildPlugin[],
+  partialsMap: Record<string, string>,
+  suiteName: string,
+  suite: SuiteConfig,
+): Record<string, string>;
+```
+
+Suite-level accumulating hook — each plugin receives the partials map returned by the previous plugin. Called once per suite after partials are loaded from disk and after any `BuildConfig.partials` inline map has been applied, but before any persona is rendered. Returns the final accumulated partials map.
+
+### `runPersonaPartials(plugins, partialsMap, persona, context, suite, target?)`
+
+```ts
+export function runPersonaPartials(
+  plugins: PersonaBuildPlugin[],
+  partialsMap: Record<string, string>,
+  persona: PersonaMetadata,
+  context: Record<string, unknown>,
+  suite: SuiteConfig,
+  target?: TargetType,
+): Record<string, string>;
+```
+
+Per-persona accumulating hook — each plugin receives the partials map returned by the previous plugin. Called for each persona (and target) after `onBuildContext`, before template rendering. The `partialsMap` argument is already a shallow copy of the suite-level map (persona-scoped isolation). Returns the final accumulated partials map.
+
 ### `runSuiteInit(plugins, suite, sharedMeta)`
 
 ```ts
@@ -460,9 +488,17 @@ export interface BuildConfig {
   /** Keyed by target name. Accepts any string key, including custom targets. */
   frontmatter?: Record<string, string>;
   /**
-   * Not yet consumed by build(). Typed now ahead of the follow-up release
-   * that will wire it into the build orchestrator.
+   * Optional map of global template variables (lowest-priority layer in the 7-layer merge chain).
+   * Overridden by SuiteConfig.variables, _shared.yaml, per-persona YAML, derived fields,
+   * the agent name map, and target flags. See Context Merge Order in data-flows.md.
    */
+  variables?: Record<string, unknown>;
+  /**
+   * Optional map of inline partials (lowest-priority layer in the 5-layer partials merge chain).
+   * Overridden by sharedPartialsDir, suite-local partials, onPartials hooks, and onPersonaPartials hooks.
+   * See Partials Resolution in data-flows.md.
+   */
+  partials?: Record<string, string>;
   targetRegistry?: TargetRegistry;
 }
 ```
@@ -472,16 +508,21 @@ export interface BuildConfig {
 ```ts
 export interface SuiteConfig {
   srcDir: string;
-  /** @deprecated Use outputDirs['vscode']. Runtime still reads this exclusively until the follow-up release. */
-  outVscode: string;
-  /** @deprecated Use outputDirs['claude-code']. Runtime still reads this exclusively until the follow-up release. */
-  outClaudeCode: string;
-  /** Not yet consumed by the runtime. Typed now ahead of the follow-up release. */
+  /** @deprecated Use outputDirs['vscode']. */
+  outVscode?: string;
+  /** @deprecated Use outputDirs['claude-code']. */
+  outClaudeCode?: string;
+  /** Generic output directory map keyed by outputDirKey. Takes precedence over deprecated fields. */
   outputDirs?: Record<string, string>;
   personaMode?: string;
   partialsSubdir?: string;   // default: 'partials'
   metaSubdir?: string;       // default: 'meta'
   contentSubdir?: string;    // default: 'content'
+  /**
+   * Optional map of suite-level template variables (second-lowest layer in the 7-layer merge chain,
+   * above BuildConfig.variables but below _shared.yaml). See Context Merge Order in data-flows.md.
+   */
+  variables?: Record<string, unknown>;
 }
 ```
 
@@ -531,12 +572,38 @@ export interface PersonaMetadata {
 export interface PersonaBuildPlugin {
   name: string;
   onSuiteInit?(suite: SuiteConfig, sharedMeta: Record<string, unknown>): void;
+  /**
+   * Suite-level accumulating hook. Called once per suite after partials are loaded.
+   * Executes within the same registry context as the enclosing `buildSuite()` call —
+   * if you passed a custom `TargetRegistry` to `buildSuite()`, your registered targets
+   * are visible during this hook. See the **Two-registry limitation** note on `buildSuite()`.
+   */
+  onPartials?(
+    partialsMap: Record<string, string>,
+    suiteName: string,
+    suite: SuiteConfig,
+  ): Record<string, string>;
   onBuildContext?(
     context: Record<string, unknown>,
     persona: PersonaMetadata,
     suite: SuiteConfig,
     target?: TargetType,
   ): Record<string, unknown>;
+  /**
+   * Per-persona accumulating hook. Called after `onBuildContext`, before rendering.
+   * Receives a shallow copy of the suite-level partialsMap (isolated per persona, so
+   * changes made here do not leak to other personas).
+   * Executes within the same registry context as the enclosing `buildPersona()` call —
+   * if you passed a custom `TargetRegistry` to `buildPersona()`, your registered targets
+   * are visible during this hook. See the **Two-registry limitation** note on `buildPersona()`.
+   */
+  onPersonaPartials?(
+    partialsMap: Record<string, string>,
+    persona: PersonaMetadata,
+    context: Record<string, unknown>,
+    suite: SuiteConfig,
+    target?: TargetType,
+  ): Record<string, string>;
   onPostRender?(output: string, persona: PersonaMetadata, target: TargetType): string;
   onValidate?(persona: PersonaMetadata, suite: SuiteConfig, target?: TargetType): ValidationResult[];
   frontmatterTemplates?: Partial<Record<TargetType, string>>;
@@ -549,7 +616,7 @@ export interface PersonaBuildPlugin {
 export type TargetType = string;
 ```
 
-Resolves to `string` to allow custom targets alongside the two built-in well-known values (`'vscode'`, `'claude-code'`). Use the exported constants `TARGET_VSCODE` and `TARGET_CLAUDE_CODE` for type-safe references to the built-in targets.
+Resolves to `string` to allow custom targets alongside the three built-in well-known values (`'vscode'`, `'claude-code'`, `'deep-agents'`). Use the exported constants `TARGET_VSCODE`, `TARGET_CLAUDE_CODE`, and `TARGET_DEEP_AGENTS` for type-safe references to the built-in targets.
 
 ### `TargetDefinition`
 
