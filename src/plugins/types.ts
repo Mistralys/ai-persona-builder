@@ -52,6 +52,14 @@ export interface PersonaMetadata {
   version?: string;
   /** Ordered list of tool identifiers */
   tools?: string[];
+  /**
+   * Optional list of persona slugs this persona delegates to as sub-agents.
+   *
+   * Each entry is a kebab-case slug referencing another persona in any
+   * configured suite. Validated during build against the cross-suite agent
+   * map — an unknown slug produces an error-severity `ValidationResult`.
+   */
+  subagents?: string[];
   /** Free-form context variables available during template rendering */
   [key: string]: unknown;
 }

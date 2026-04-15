@@ -75,6 +75,43 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 ---
 
+## Sub-Agent Validation Constraints
+
+### 7. `subagents` Slugs Must Reference Existing Cross-Suite Personas
+
+`PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `buildAgentNameMap()` during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
+
+**Key derivation rule:** Slug `my-agent` maps to key `agent_slug_my_agent` (hyphens → underscores). The agent map is populated from the `slug` field of every persona YAML in all configured suites — a slug only resolves if the corresponding persona exists *and* is discoverable in the build configuration.
+
+**Strict mode:** When `strict: true` is set in `BuildConfig`, unknown slugs cause `buildSuite()` to throw after collecting all validation results. When not in strict mode, the errors are reported in `BuildResult.validationResults` but do not halt the build.
+
+**Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]`.
+
+---
+
+### 8. Planned `onPreRender` Hook — Not Yet Implemented
+
+> **Planned — not yet implemented.** This hook does not exist in the current library. The description below documents the *intended* design for a future release.
+
+The plan calls for an `onPreRender` hook on `PersonaBuildPlugin` that fires after `resolvePartials()` but before `resolveConditionals()` in the body render phase (step 7 of `buildPersona()`). At this injection point, partials have been inlined but `{{variable}}` references and `{{#if}}` blocks remain unresolved — making raw template inspection (e.g., scanning for `{{agent_slug_*}}` variable references) possible.
+
+**Intended signature:**
+```ts
+onPreRender?(
+  rawTemplate: string,
+  context: Record<string, unknown>,
+  persona: PersonaMetadata,
+  suite: SuiteConfig,
+  target: TargetType,
+): void;
+```
+
+**Intended behaviour:** Inspection-only — the return value is ignored and the hook cannot modify the template. Side-effects (e.g., collecting template dependency metadata for use in `onValidate`) are the primary use case.
+
+**Migration path:** Once this hook ships, the `agent_slug_*` ↔ `subagents` cross-reference check currently implemented in the workspace-specific `scripts/build-personas.js` can move into a persona-builder plugin. The plugin would scan `rawTemplate` in `onPreRender` and compare against `persona.subagents` in `onValidate`. Until the hook exists, the workspace-specific script remains the pragmatic home for that check.
+
+---
+
 ## Known Limitations
 
 ### 1. `serializeTools` Single-Quote Escaping

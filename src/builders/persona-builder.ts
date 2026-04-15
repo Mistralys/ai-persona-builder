@@ -369,6 +369,42 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Validate that all slugs declared in a persona's `subagents` field exist
+ * in the cross-suite agent map.
+ *
+ * The agent map contains keys in the form `agent_slug_{underscored_slug}`
+ * (hyphens replaced by underscores).  A declared slug is considered valid
+ * when its corresponding key is present in the map.
+ *
+ * @param persona   Typed persona metadata (may or may not have `subagents`)
+ * @param agentMap  Cross-suite agent name map built by `buildAgentNameMap()`
+ * @returns         `ValidationResult[]` — one error per unknown slug, or `[]`
+ */
+function validateSubagentRefs(
+  persona: PersonaMetadata,
+  agentMap: Record<string, string>,
+): ValidationResult[] {
+  const subagents = persona.subagents;
+  if (!Array.isArray(subagents) || subagents.length === 0) return [];
+
+  const results: ValidationResult[] = [];
+
+  for (const slug of subagents) {
+    const key = `agent_slug_${slug.replace(/-/g, '_')}`;
+    if (!(key in agentMap)) {
+      results.push({
+        severity: 'error',
+        message:
+          `Persona '${persona.name}' declares subagent '${slug}' but no persona ` +
+          `with that slug exists in any configured suite.`,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Build a single persona for a single output target.
  *
  * Pipeline:
@@ -490,8 +526,11 @@ export async function buildPersona(
   // ── 9. Plugin onPostRender ────────────────────────────────────────────────
   output = runPostRender(plugins, output, personaMetaTyped, target);
 
-  // ── 10. Plugin onValidate ──────────────────────────────────────────────────
-  const validationResults: ValidationResult[] = runValidate(plugins, personaMetaTyped, suiteConfig, target);
+  // ── 10. Plugin onValidate + subagent ref validation ─────────────────────
+  const validationResults: ValidationResult[] = [
+    ...runValidate(plugins, personaMetaTyped, suiteConfig, target),
+    ...validateSubagentRefs(personaMetaTyped, agentMap),
+  ];
 
   // ── 11. Determine output file path ────────────────────────────────────────
   // Resolve the registry definition once — used for both outputDirKey (map

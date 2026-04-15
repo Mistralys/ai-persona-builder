@@ -61,7 +61,7 @@ export async function buildPersona(
 ): Promise<BuildResult>;
 ```
 
-Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context (`onBuildContext`) → per-persona partials (`onPersonaPartials`) → frontmatter → body rendering → post-processing (`onPostRender`) → validation (`onValidate`) → write.
+Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context (`onBuildContext`) → per-persona partials (`onPersonaPartials`) → frontmatter → body rendering → post-processing (`onPostRender`) → validation (`onValidate` + `validateSubagentRefs()`) → write. The optional `agentMap` (a `Record<string, string>` of `agent_slug_*` keys to raw slug values) is passed to `validateSubagentRefs()` to verify that every slug in `persona.subagents` has a corresponding entry in the map. Passing `{}` (the default) skips validation — no errors are emitted for unknown slugs.
 
 **Two-registry limitation:** `registry` defaults to `defaultRegistry`. If you pass a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and call `buildPersona()` directly without the same registry argument, your custom targets will not be visible. Either pass the registry instance explicitly here, or use `build()` to have it forwarded automatically.
 
@@ -270,6 +270,19 @@ export function validateStrictMarkers(
 ```
 
 Checks that every marker in `requiredMarkers` appears verbatim in `renderedContent`. Returns one error per missing marker.
+
+### `validateSubagentRefs(persona, agentMap)`
+
+```ts
+export function validateSubagentRefs(
+  persona: PersonaMetadata,
+  agentMap: Record<string, string>,
+): ValidationResult[];
+```
+
+Validates that every slug declared in `persona.subagents` has a corresponding `agent_slug_*` key in `agentMap`. Returns one `ValidationResult` (severity `'error'`) per unknown slug, with a message that includes the persona name and the unresolved slug. Early-exits and returns `[]` when `persona.subagents` is absent or empty, or when `agentMap` is empty. Called internally by `buildPersona()` and collects its results alongside `onValidate` hook results.
+
+**Key derivation:** Slugs are looked up via `agent_slug_${slug.replace(/-/g, '_')}` — matching the key naming convention established by `buildAgentNameMap()`. Unknown slugs indicate a configuration mismatch between the persona's `subagents` declaration and the actual agent map built from the configured suites.
 
 ---
 
@@ -562,6 +575,7 @@ export interface PersonaMetadata {
   description?: string;
   version?: string;
   tools?: string[];
+  subagents?: string[];
   [key: string]: unknown;
 }
 ```

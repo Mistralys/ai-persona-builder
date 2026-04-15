@@ -43,13 +43,15 @@ build(config)
   │     │                 ├─ 7. Load content template (.md file)
   │     │                 ├─ 8. Render body:
   │     │                 │     ├─ resolvePartials (depth-2 recursion)
+  │     │                 │     ├─ [PLANNED] onPreRender hooks — fires here, after partials but before
+  │     │                 │     │   conditionals/variables (raw template still intact; inspection-only)
   │     │                 │     ├─ resolveConditionals
   │     │                 │     ├─ resolveVariables
   │     │                 │     ├─ collapseBlankLines
   │     │                 │     └─ ensureBlankLineBeforeHeadings
   │     │                 ├─ 9. Assemble output (frontmatter + body)
   │     │                 ├─ 10. Run onPostRender hooks (output chain)
-  │     │                 ├─ 11. Run onValidate hooks (collect ValidationResults)
+  │     │                 ├─ 11. Run onValidate hooks + validateSubagentRefs() (collect ValidationResults)
   │     │                 ├─ 12. Determine output path (vs_file_name / cc_file_name)
   │     │                 └─ 13. Write file (unless check mode)
   │     │
