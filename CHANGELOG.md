@@ -2,12 +2,14 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.4.1 - Subagent Declarations
+- Builder: Subagent usage is now validated in personas to ensure they exist.
+- Metadata: Added the `subagents` field to specify an agent's possible subagents.
+
 ## v2.4.0 - Dynamic Partials & Subagent Declarations
 - Builder: Added `BuildConfig.partials` inline partials map as lowest-precedence layer.
 - Builder: Added global `BuildConfig.variables` and per-suite `SuiteConfig.variables` template maps.
 - Builder: Extended partials to a five-layer stack; context merge to a seven-layer stack.
-- Builder: Subagent usage is now validated in personas to ensure they exist.
-- Metadata: Added the `subagents` field to specify an agent's possible subagents.
 - Plugins: Added `onPartials` hook for suite-level partial injection after disk load.
 - Plugins: Added `onPersonaPartials` hook for per-persona partial overrides.
 - Tests: Added suites for partials config, suite variables, persona hooks, and integration.
