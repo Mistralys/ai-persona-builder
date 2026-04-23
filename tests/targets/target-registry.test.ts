@@ -9,6 +9,7 @@
  *   - Duplicate registration throws descriptive error (AC-3)
  *   - get() for unknown name throws descriptive error listing known targets (AC-4)
  *   - Smoke import: all expected symbols are exported from the package entry point (AC-5)
+ *   - DEFAULT_FRONTMATTER_CLAUDE_CODE field structure assertions
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -295,5 +296,48 @@ describe('package entry-point exports', () => {
     expect(def).toHaveProperty('name');
     expect(def).toHaveProperty('outputDirKey');
     expect(def).toHaveProperty('defaultFrontmatter');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEFAULT_FRONTMATTER_CLAUDE_CODE — field structure assertions
+// ---------------------------------------------------------------------------
+
+describe('DEFAULT_FRONTMATTER_CLAUDE_CODE', () => {
+  // Import the constant directly from types.ts (not barrel-exported).
+  let template: string;
+
+  beforeEach(async () => {
+    const mod = await import('../../src/targets/types.js');
+    template = mod.DEFAULT_FRONTMATTER_CLAUDE_CODE;
+  });
+
+  it('contains the name field', () => {
+    expect(template).toMatch(/^name:/m);
+  });
+
+  it('contains the permissionMode field', () => {
+    expect(template).toMatch(/^permissionMode:/m);
+  });
+
+  it('contains the model field', () => {
+    expect(template).toMatch(/^model:/m);
+  });
+
+  it('contains the memory field', () => {
+    expect(template).toMatch(/^memory:/m);
+  });
+
+  it('contains the tools field (not allowedTools)', () => {
+    expect(template).toMatch(/^tools:/m);
+  });
+
+  it('does NOT contain the allowedTools field', () => {
+    expect(template).not.toMatch(/^allowedTools:/m);
+  });
+
+  it('is wrapped in YAML frontmatter delimiters', () => {
+    expect(template).toMatch(/^---\n/);
+    expect(template).toMatch(/\n---$/);
   });
 });

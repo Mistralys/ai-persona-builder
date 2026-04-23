@@ -105,7 +105,7 @@ mcpServers:
 ```
 
 > **Common mistake:** Putting MCP server references in the `cc_tools` array. Claude Code's
-> `allowedTools` list is for **built-in tools only**. MCP servers go in `mcpServers`.
+> `tools` list is for **built-in tools only**. MCP servers go in `mcpServers`.
 
 ### Quick Reference Table
 
@@ -163,12 +163,11 @@ Key fields:
 |-------|---------|-------------|
 | `name` (with version) | Yes | No — uses filename stem |
 | `description` | Yes | Optional |
-| `tools` (with MCP refs) | Yes | No — uses `allowedTools` |
+| `tools` | Yes (MCP refs allowed) | Yes (capitalized built-in names) |
 | `permissionMode` | No | Yes |
 | `model` | Optional | Yes |
 | `memory` | No | Yes |
 | `mcpServers` | No | Yes |
-| `allowedTools` | No | Yes |
 
 ---
 
@@ -391,7 +390,7 @@ name: my-agent
 permissionMode: default
 model: claude-sonnet-4-5
 memory: project
-allowedTools: ['Read', 'Edit', 'Grep', 'Bash']
+tools: ['Read', 'Edit', 'Grep', 'Bash']
 ---
 ```
 ```markdown

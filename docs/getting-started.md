@@ -248,7 +248,7 @@ name: code-reviewer
 permissionMode: default
 model: claude-sonnet-4-5
 memory: project
-allowedTools: ['read', 'search']
+tools: ['read', 'search']
 ---
 
 Hello, I am Code Reviewer v1.0.0.

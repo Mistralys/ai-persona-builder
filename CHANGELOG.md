@@ -2,6 +2,9 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.4.2 - Claude Tools Fix
+- Builder: Claude-specific tools renamed from `allowedTools` to `tools`.
+
 ## v2.4.1 - Subagent Declarations
 - Builder: Subagent usage is now validated in personas to ensure they exist.
 - Metadata: Added the `subagents` field to specify an agent's possible subagents.

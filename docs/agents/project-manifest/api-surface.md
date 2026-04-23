@@ -326,7 +326,7 @@ Built-in VS Code frontmatter template (`name`, `description`, `tools`). Owned by
 export const DEFAULT_FRONTMATTER_CLAUDE_CODE: string;
 ```
 
-Built-in Claude Code frontmatter template (`name`, `permissionMode`, `model`, `memory`, `allowedTools`). Owned by `src/targets/types.ts`; re-exported from `src/builders/frontmatter.ts` for API continuity.
+Built-in Claude Code frontmatter template (`name`, `permissionMode`, `model`, `memory`, `tools`). Owned by `src/targets/types.ts`; re-exported from `src/builders/frontmatter.ts` for API continuity.
 
 ### `DEFAULT_FRONTMATTER_DEEP_AGENTS`
 
