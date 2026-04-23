@@ -115,7 +115,7 @@ tools:
 show_feedback_template: true
 ```
 
-Key fields:
+Key fields (see [Target Differences](target-differences.md) for platform-specific conventions):
 
 | Field | Purpose |
 |-------|---------|

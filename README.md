@@ -73,6 +73,7 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Getting Started](docs/getting-started.md) | Step-by-step tutorial — build your first persona from scratch |
 | [Directory Convention](docs/directory-convention.md) | Expected source layout (`meta/`, `content/`, `partials/`) |
 | [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, and built-in context variables |
+| [Target Differences](docs/target-differences.md) | VS Code vs Claude Code — tool notation, frontmatter, filename conventions, and common mistakes |
 | [Custom Variables & Dynamic Partials](docs/dynamic-partials.md) | Inject build-time variables and partial content at global, suite, or per-persona level |
 | [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface and examples |
 

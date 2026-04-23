@@ -17,7 +17,7 @@ produce incorrect output when they are absent.
 | `name` | `string` | **Hard required** | `loadMetadata()` throws an error |
 | `slug` | `string` | Strongly recommended | Falls back to the YAML filename stem; used for `agent_*` map keys and output path fallback |
 | `description` | `string` | Recommended | Default VS Code frontmatter leaves `description` unresolved (warns to stderr) |
-| `tools` | `string[]` | Recommended | Default frontmatter templates leave `tools` empty; `tools_list` / `tools_json` become empty strings |
+| `tools` | `string[]` | Recommended | Default frontmatter templates leave `tools` empty; `tools_list` / `tools_json` become empty strings. See [Target Differences](target-differences.md) for tool notation rules per target. |
 
 ---
 
@@ -61,7 +61,7 @@ references them.
 
 | Field | Type | Fallback | Description |
 |-------|------|----------|-------------|
-| `cc_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Claude Code target. Exposed as `{{cc_tools_list}}` and `{{cc_tools_json}}` in the template context. Useful when the Claude Code persona needs a different toolset from the VS Code persona. |
+| `cc_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Claude Code target. Exposed as `{{cc_tools_list}}` and `{{cc_tools_json}}` in the template context. Useful when the Claude Code persona needs a different toolset from the VS Code persona. See [Target Differences](target-differences.md) for when and why to use separate tool lists. |
 ---
 
 ## Tier 4b — Deep Agents Tool Override
