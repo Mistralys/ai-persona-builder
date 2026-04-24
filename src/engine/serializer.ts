@@ -38,3 +38,27 @@ export function serializeTools(tools: string[]): string {
 export function serializeToolsList(tools: string[]): string {
   return tools.map((t) => `'${t}'`).join(', ');
 }
+
+/**
+ * Serialize a tools array as a YAML block sequence.
+ *
+ * Output format (non-empty):
+ *   `\n  - tool1\n  - tool2`
+ *
+ * Output format (empty):
+ *   ` []`
+ *
+ * Designed for use in frontmatter templates as `tools:{{tools_block}}`
+ * (no space between the colon and the variable).
+ *
+ * @param tools - Array of tool name strings
+ * @returns     YAML block sequence string (includes leading newline for non-empty arrays)
+ *
+ * @example
+ * serializeToolsBlock(['Bash', 'Read']) // => "\n  - Bash\n  - Read"
+ * serializeToolsBlock([])              // => " []"
+ */
+export function serializeToolsBlock(tools: string[]): string {
+  if (tools.length === 0) return ' []';
+  return '\n' + tools.map((t) => `  - ${t}`).join('\n');
+}

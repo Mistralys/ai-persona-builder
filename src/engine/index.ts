@@ -13,4 +13,4 @@ export {
   ensureBlankLineBeforeHeadings,
   normalizeNewlines,
 } from './postProcessor.js';
-export { serializeTools, serializeToolsList } from './serializer.js';
+export { serializeTools, serializeToolsList, serializeToolsBlock } from './serializer.js';

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { serializeTools, serializeToolsList } from '../../src/engine/serializer.js';
+import { serializeTools, serializeToolsList, serializeToolsBlock } from '../../src/engine/serializer.js';
 
 // ---------------------------------------------------------------------------
 // serializeTools()
@@ -76,6 +76,40 @@ describe('serializeToolsList()', () => {
   it('separates tools with ", " (comma space)', () => {
     const result = serializeToolsList(['A', 'B']);
     expect(result).toBe("'A', 'B'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// serializeToolsBlock()
+// ---------------------------------------------------------------------------
+
+describe('serializeToolsBlock()', () => {
+  it('serializes a single tool as a block sequence', () => {
+    expect(serializeToolsBlock(['Bash'])).toBe('\n  - Bash');
+  });
+
+  it('serializes multiple tools as a block sequence', () => {
+    expect(serializeToolsBlock(['Bash', 'Read'])).toBe('\n  - Bash\n  - Read');
+  });
+
+  it('serializes an empty array to " []"', () => {
+    expect(serializeToolsBlock([])).toBe(' []');
+  });
+
+  it('does not quote tool names', () => {
+    const result = serializeToolsBlock(['mcp__server__tool']);
+    expect(result).not.toContain("'");
+    expect(result).toContain('  - mcp__server__tool');
+  });
+
+  it('produces valid YAML when prefixed with "tools:"', () => {
+    const result = 'tools:' + serializeToolsBlock(['A', 'B', 'C']);
+    expect(result).toBe('tools:\n  - A\n  - B\n  - C');
+  });
+
+  it('produces valid empty YAML when prefixed with "tools:"', () => {
+    const result = 'tools:' + serializeToolsBlock([]);
+    expect(result).toBe('tools: []');
   });
 });
 

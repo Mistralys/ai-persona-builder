@@ -96,10 +96,10 @@ tools: [{{tools_list}}]
  */
 export const DEFAULT_FRONTMATTER_CLAUDE_CODE = `---
 name: {{cc_file_name_stem}}
-permissionMode: {{cc_permission_mode}}
+description: {{description}}
 model: {{cc_model}}
 memory: {{cc_memory}}
-tools: [{{cc_tools_list}}]
+tools:{{cc_tools_block}}
 ---`;
 
 /**

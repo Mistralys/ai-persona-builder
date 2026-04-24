@@ -48,7 +48,7 @@ import {
   ensureBlankLineBeforeHeadings,
   normalizeNewlines,
 } from '../engine/postProcessor.js';
-import { serializeTools, serializeToolsList } from '../engine/serializer.js';
+import { serializeTools, serializeToolsList, serializeToolsBlock } from '../engine/serializer.js';
 import { loadPartials } from '../loaders/partials-loader.js';
 import {
   runSuiteInit,
@@ -315,6 +315,16 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
     merged['cc_tools_json'] = serializeTools(ccTools);
   }
 
+  // tools_block — block sequence from `tools` array
+  if (!('tools_block' in merged)) {
+    merged['tools_block'] = serializeToolsBlock(tools);
+  }
+
+  // cc_tools_block — block sequence from `cc_tools` or fall back to `tools`
+  if (!('cc_tools_block' in merged)) {
+    merged['cc_tools_block'] = serializeToolsBlock(ccTools);
+  }
+
   // cc_file_name_stem — stem of cc_file_name (for default CC frontmatter template)
   if (!('cc_file_name_stem' in merged) && typeof merged['cc_file_name'] === 'string') {
     const ccFileName = merged['cc_file_name'] as string;
@@ -337,6 +347,9 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
     }
     if (!('da_tools_json' in merged)) {
       merged['da_tools_json'] = serializeTools(daTools);
+    }
+    if (!('da_tools_block' in merged)) {
+      merged['da_tools_block'] = serializeToolsBlock(daTools);
     }
   }
 

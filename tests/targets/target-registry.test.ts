@@ -316,8 +316,12 @@ describe('DEFAULT_FRONTMATTER_CLAUDE_CODE', () => {
     expect(template).toMatch(/^name:/m);
   });
 
-  it('contains the permissionMode field', () => {
-    expect(template).toMatch(/^permissionMode:/m);
+  it('contains the description field', () => {
+    expect(template).toMatch(/^description:/m);
+  });
+
+  it('does NOT contain the permissionMode field', () => {
+    expect(template).not.toMatch(/^permissionMode:/m);
   });
 
   it('contains the model field', () => {
