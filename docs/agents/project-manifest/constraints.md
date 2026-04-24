@@ -118,9 +118,9 @@ onPreRender?(
 
 `serializeTools()` does not escape single quotes inside tool names (e.g., `Tool's` → `['Tool's']` which is invalid YAML). Acceptable for alphanumeric tool names. Add escaping before any consumer registers tool names with apostrophes.
 
-### 2. `cc_model` / `cc_permission_mode` / `cc_memory` Not Auto-Derived
+### 2. `cc_model` / `cc_memory` Not Auto-Derived
 
-The default Claude Code frontmatter template references these three context variables, but they are not computed by `buildContext()`. They must come from `_shared.yaml` or a plugin's `onBuildContext` hook. Missing values produce `[WARN] Unresolved variable` in stderr but do not fail the build unless `strict: true`.
+The default Claude Code frontmatter template references these two context variables, but they are not computed by `buildContext()`. They must come from `_shared.yaml` or a plugin's `onBuildContext` hook. Missing values produce `[WARN] Unresolved variable` in stderr but do not fail the build unless `strict: true`.
 
 ### 3. Node.js Version Floor
 

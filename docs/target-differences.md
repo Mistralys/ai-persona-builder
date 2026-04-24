@@ -140,10 +140,14 @@ Key fields:
 ```yaml
 ---
 name: my-persona
-permissionMode: default
+description: Brief description of the persona.
 model: claude-sonnet-4-5
 memory: project
-tools: ['Read', 'Edit', 'Grep', 'Bash']
+tools:
+  - Read
+  - Edit
+  - Grep
+  - Bash
 mcpServers:
   - my_server
 ---
@@ -151,10 +155,10 @@ mcpServers:
 
 Key fields:
 - `name` — the filename stem, **no version number**
-- `permissionMode` — Claude Code permission mode (`default`, `acceptEdits`, etc.)
+- `description` — brief description of the persona (shown in Claude Code)
 - `model` — Claude Code model identifier (or `inherit` to use the user's configured model)
 - `memory` — memory scope (`project`, `user`, or `false`)
-- `tools` — Claude Code built-in tools only (capitalized names)
+- `tools` — Claude Code built-in tools only (capitalized names); rendered as a block sequence by default
 - `mcpServers` — list of MCP server names available to this persona
 
 ### Fields That Only Exist in One Target
@@ -162,9 +166,9 @@ Key fields:
 | Field | VS Code | Claude Code |
 |-------|---------|-------------|
 | `name` (with version) | Yes | No — uses filename stem |
-| `description` | Yes | Optional |
+| `description` | Yes | Yes |
 | `tools` | Yes (MCP refs allowed) | Yes (capitalized built-in names) |
-| `permissionMode` | No | Yes |
+| `permissionMode` | No | Optional |
 | `model` | Optional | Yes |
 | `memory` | No | Yes |
 | `mcpServers` | No | Yes |
@@ -278,7 +282,6 @@ Suite-wide defaults for Claude Code frontmatter fields belong in `_shared.yaml`:
 default_version: '1.0.0'
 
 # Claude Code defaults (Tier 3 fields)
-cc_permission_mode: default
 cc_model: claude-sonnet-4-5
 cc_memory: project
 ```
@@ -301,7 +304,7 @@ Before submitting persona changes, verify:
 | 5 | Claude Code filename suffix | Must be plain `.md`, not `.agent.md` |
 | 6 | Separate tool lists | Use `cc_tools` when Claude Code needs different tool names |
 | 7 | Same tools for both targets | When using a single `tools` list, ensure the names work for both |
-| 8 | Claude Code frontmatter fields | Include `permissionMode`, `model`, `memory` — they have no VS Code equivalent |
+| 8 | Claude Code frontmatter fields | Include `model` and `memory` — they have no VS Code equivalent; `description` is also referenced by the default template |
 | 9 | Version in name | VS Code `name` includes version (`v1.0.0`); Claude Code `name` does not |
 | 10 | Target conditionals | Use `{{#if target_vscode}}` / `{{#if target_claude_code}}` for platform-specific content |
 
@@ -313,7 +316,6 @@ Before submitting persona changes, verify:
 
 ```yaml
 default_version: '1.0.0'
-cc_permission_mode: default
 cc_model: claude-sonnet-4-5
 cc_memory: project
 ```

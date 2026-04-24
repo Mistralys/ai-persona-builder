@@ -98,6 +98,8 @@ Fields computed by `buildContext()` at build time (merge step 3). All are only s
 | `tools_json` | `tools` array | `['tool1', 'tool2']` |
 | `cc_tools_list` | `cc_tools` → fallback to `tools` | `'tool1', 'tool2'` |
 | `cc_tools_json` | `cc_tools` → fallback to `tools` | `['tool1', 'tool2']` |
+| `tools_block` | `tools` array | YAML block sequence |
+| `cc_tools_block` | `cc_tools` → fallback to `tools` | YAML block sequence |
 | `cc_file_name_stem` | `cc_file_name` with `.md` stripped | String |
 
 ### Deep Agents Derived Fields (gated on `da_file_name` presence)
@@ -109,6 +111,7 @@ These three fields mirror the `cc_*` pattern but apply to the `deep-agents` targ
 | `da_file_name_stem` | `da_file_name` with `.md` stripped | String |
 | `da_tools_list` | `da_tools` → fallback to `tools` | `'tool1', 'tool2'` |
 | `da_tools_json` | `da_tools` → fallback to `tools` | `['tool1', 'tool2']` |
+| `da_tools_block` | `da_tools` → fallback to `tools` | YAML block sequence |
 
 **`da_*` gate asymmetry vs `cc_*`:** The `cc_*` tools fields are emitted unconditionally for all personas, but the `da_*` fields are gated on `da_file_name` being set. This means personas that do not produce a Deep Agents output file will never have `da_*` in their context, rather than receiving empty values.
 
@@ -195,6 +198,14 @@ export function serializeToolsList(tools: string[]): string;
 ```
 
 Returns comma-separated quoted tool names without brackets: `'tool1', 'tool2'`.
+
+### `serializeToolsBlock(tools)`
+
+```ts
+export function serializeToolsBlock(tools: string[]): string;
+```
+
+Returns YAML block sequence with leading newline for non-empty arrays (`\n  - tool1\n  - tool2`), or ` []` for empty — intended for use as `tools:{{tools_block}}` in frontmatter templates.
 
 ---
 
@@ -326,7 +337,7 @@ Built-in VS Code frontmatter template (`name`, `description`, `tools`). Owned by
 export const DEFAULT_FRONTMATTER_CLAUDE_CODE: string;
 ```
 
-Built-in Claude Code frontmatter template (`name`, `permissionMode`, `model`, `memory`, `tools`). Owned by `src/targets/types.ts`; re-exported from `src/builders/frontmatter.ts` for API continuity.
+Built-in Claude Code frontmatter template (`name`, `description`, `model`, `memory`, `tools` as block sequence). Owned by `src/targets/types.ts`; re-exported from `src/builders/frontmatter.ts` for API continuity.
 
 ### `DEFAULT_FRONTMATTER_DEEP_AGENTS`
 

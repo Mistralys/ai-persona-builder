@@ -92,16 +92,19 @@ Template variables are resolved from a merged context object. Later values win:
 | `tools_json` | `serializeTools(tools)` | Always |
 | `cc_tools_list` | `serializeToolsList(cc_tools ?? tools)` | Always |
 | `cc_tools_json` | `serializeTools(cc_tools ?? tools)` | Always |
+| `tools_block` | `serializeToolsBlock(tools)` | Always |
+| `cc_tools_block` | `serializeToolsBlock(cc_tools ?? tools)` | Always |
 | `cc_file_name_stem` | `cc_file_name` with `.md` extension stripped | Always |
 | `da_file_name_stem` | `da_file_name` with `.md` extension stripped | Only when `da_file_name` is set |
 | `da_tools_list` | `serializeToolsList(da_tools ?? tools)` | Only when `da_file_name` is set |
 | `da_tools_json` | `serializeTools(da_tools ?? tools)` | Only when `da_file_name` is set |
+| `da_tools_block` | `serializeToolsBlock(da_tools ?? tools)` | Only when `da_file_name` is set |
 | `agent_<slug>` | `"<name> v<version>"` for every persona across all suites; slug hyphens → underscores in key | Always |
 | `agent_slug_<slug>` | Raw hyphenated slug string for every persona; key uses underscores, value preserves hyphens | Always |
 
 Derived fields are only set when not already present in the merged context — explicit YAML values always win.
 
-> **`da_*` gate:** The `da_file_name_stem`, `da_tools_list`, and `da_tools_json` fields are
+> **`da_*` gate:** The `da_file_name_stem`, `da_tools_list`, `da_tools_json`, and `da_tools_block` fields are
 > gated on `da_file_name` being present in the merged context. Personas without `da_file_name`
 > will not have these fields injected (no error, no empty string). This differs from the
 > `cc_*` equivalents which are always emitted unconditionally.

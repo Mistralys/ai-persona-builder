@@ -16,7 +16,7 @@ produce incorrect output when they are absent.
 |-------|------|-----------|----------------------|
 | `name` | `string` | **Hard required** | `loadMetadata()` throws an error |
 | `slug` | `string` | Strongly recommended | Falls back to the YAML filename stem; used for `agent_*` map keys and output path fallback |
-| `description` | `string` | Recommended | Default VS Code frontmatter leaves `description` unresolved (warns to stderr) |
+| `description` | `string` | Recommended | Referenced by both the default VS Code and default Claude Code frontmatter templates. Missing value warns to stderr. |
 | `tools` | `string[]` | Recommended | Default frontmatter templates leave `tools` empty; `tools_list` / `tools_json` become empty strings. See [Target Differences](target-differences.md) for tool notation rules per target. |
 
 ---
@@ -39,14 +39,13 @@ omitting them causes the engine to fall back to the content file's basename.
 
 ## Tier 3 — Default Claude Code Frontmatter Fields
 
-The default Claude Code frontmatter template references these three variables. They must be present
+The default Claude Code frontmatter template references these two variables. They must be present
 in **either** a per-persona YAML file or in `meta/_shared.yaml` (suite-wide defaults). Missing
 values produce `[WARN] Unresolved variable` in stderr but do not fail the build unless `strict:
 true` is set.
 
 | Field | Type | Template variable | Description |
 |-------|------|-------------------|-------------|
-| `cc_permission_mode` | `string` | `{{cc_permission_mode}}` | Claude Code permission mode (e.g. `default`, `allowedOnly`) |
 | `cc_model` | `string` | `{{cc_model}}` | Claude Code model identifier (e.g. `claude-sonnet-4-5`) |
 | `cc_memory` | `string \| boolean` | `{{cc_memory}}` | Claude Code memory setting (e.g. `project`, `false`) |
 
@@ -61,14 +60,14 @@ references them.
 
 | Field | Type | Fallback | Description |
 |-------|------|----------|-------------|
-| `cc_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Claude Code target. Exposed as `{{cc_tools_list}}` and `{{cc_tools_json}}` in the template context. Useful when the Claude Code persona needs a different toolset from the VS Code persona. See [Target Differences](target-differences.md) for when and why to use separate tool lists. |
+| `cc_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Claude Code target. Exposed as `{{cc_tools_list}}`, `{{cc_tools_json}}`, and `{{cc_tools_block}}` in the template context. Useful when the Claude Code persona needs a different toolset from the VS Code persona. See [Target Differences](target-differences.md) for when and why to use separate tool lists. |
 ---
 
 ## Tier 4b — Deep Agents Tool Override
 
 | Field | Type | Fallback | Description |
 |-------|------|----------|-----------|
-| `da_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Deep Agents target. Only consumed when `da_file_name` is also set. Exposed as `{{da_tools_list}}` and `{{da_tools_json}}` in the template context. |
+| `da_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Deep Agents target. Only consumed when `da_file_name` is also set. Exposed as `{{da_tools_list}}`, `{{da_tools_json}}`, and `{{da_tools_block}}` in the template context. |
 ---
 
 ## Tier 5 — Optional / Convention Fields
@@ -129,12 +128,15 @@ They are available in all templates but do **not** need to appear in YAML.
 | `{{version}}` | `version` → `default_version` → `'0.0.0'` | Resolved version string |
 | `{{tools_list}}` | `tools` array | Comma-separated quoted tool names: `'read', 'write'` |
 | `{{tools_json}}` | `tools` array | JSON array with outer brackets: `['read', 'write']` |
+| `{{tools_block}}` | `tools` array | YAML block sequence: `\n  - read\n  - write`; or ` []` when empty |
 | `{{cc_tools_list}}` | `cc_tools` → fallback to `tools` | Same format as `tools_list`, for Claude Code target |
 | `{{cc_tools_json}}` | `cc_tools` → fallback to `tools` | Same format as `tools_json`, for Claude Code target |
+| `{{cc_tools_block}}` | `cc_tools` → fallback to `tools` | YAML block sequence for the Claude Code target; used in the default Claude Code frontmatter |
 | `{{cc_file_name_stem}}` | `cc_file_name` (strips `.md`) | Used in the default Claude Code frontmatter `name` field |
 | `{{da_file_name_stem}}` | `da_file_name` (strips `.md`) | Only present when `da_file_name` is set; used in the default Deep Agents frontmatter `name` field |
 | `{{da_tools_list}}` | `da_tools` → fallback to `tools` | Only present when `da_file_name` is set; same format as `tools_list`, for Deep Agents target |
 | `{{da_tools_json}}` | `da_tools` → fallback to `tools` | Only present when `da_file_name` is set; same format as `tools_json`, for Deep Agents target |
+| `{{da_tools_block}}` | `da_tools` → fallback to `tools` | Only present when `da_file_name` is set; YAML block sequence for the Deep Agents target |
 | `{{agent_<slug>}}` | All personas across all suites | Cross-suite reference: `"<name> v<version>"`. Key uses slug with hyphens replaced by underscores. |
 
 See [Template Syntax](template-syntax.md) for how to use these variables, partials, and

@@ -96,11 +96,14 @@ The builder automatically derives several convenience variables from YAML metada
 | `{{version}}` | `version` field, or `default_version` from `_shared.yaml`, or `'0.0.0'` |
 | `{{tools_list}}` | Comma-separated string of `tools` array items |
 | `{{tools_json}}` | JSON array string of `tools` items |
+| `{{tools_block}}` | YAML block sequence of `tools` items; or ` []` when empty |
 | `{{cc_tools_list}}` | Comma-separated string of `cc_tools` (falls back to `tools`) |
 | `{{cc_tools_json}}` | JSON array string of `cc_tools` |
+| `{{cc_tools_block}}` | YAML block sequence of `cc_tools` (falls back to `tools`); used in the default Claude Code frontmatter |
 | `{{cc_file_name_stem}}` | Stem of `cc_file_name` (filename without `.md` extension) |
 | `{{da_tools_list}}` | Comma-separated string of `da_tools` (falls back to `tools`); only present when `da_file_name` is set |
 | `{{da_tools_json}}` | JSON array string of `da_tools`; only present when `da_file_name` is set |
+| `{{da_tools_block}}` | YAML block sequence of `da_tools` (falls back to `tools`); only present when `da_file_name` is set |
 | `{{da_file_name_stem}}` | Stem of `da_file_name` (filename without `.md` extension); only present when `da_file_name` is set |
 | `{{target_vscode}}` | `true` when building for the `vscode` target; absent otherwise |
 | `{{target_claude_code}}` | `true` when building for the `claude-code` target; absent otherwise |
@@ -141,10 +144,10 @@ tools: [{{tools_list}}]
 ```
 ---
 name: {{cc_file_name_stem}}
-permissionMode: {{cc_permission_mode}}
+description: {{description}}
 model: {{cc_model}}
 memory: {{cc_memory}}
-tools: [{{cc_tools_list}}]
+tools:{{cc_tools_block}}
 ---
 ```
 
@@ -156,7 +159,7 @@ The default Claude Code template uses the following variables that must be prese
 
 | Variable | YAML field | Required by |
 |----------|-----------|-------------|
-| `{{cc_permission_mode}}` | `cc_permission_mode` | Default Claude Code frontmatter |
+| `{{description}}` | `description` | Default Claude Code frontmatter |
 | `{{cc_model}}` | `cc_model` | Default Claude Code frontmatter |
 | `{{cc_memory}}` | `cc_memory` | Default Claude Code frontmatter |
 
@@ -166,7 +169,6 @@ Missing fields produce an `[WARN] Unresolved variable` message in stderr but do 
 
 ```yaml
 default_version: '1.0.0'
-cc_permission_mode: default
 cc_model: claude-opus-4-5
 cc_memory: project
 ```
