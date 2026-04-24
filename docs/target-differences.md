@@ -143,7 +143,7 @@ name: my-persona
 permissionMode: default
 model: claude-sonnet-4-5
 memory: project
-allowedTools: ['Read', 'Edit', 'Grep', 'Bash']
+tools: ['Read', 'Edit', 'Grep', 'Bash']
 mcpServers:
   - my_server
 ---
@@ -154,7 +154,7 @@ Key fields:
 - `permissionMode` — Claude Code permission mode (`default`, `acceptEdits`, etc.)
 - `model` — Claude Code model identifier (or `inherit` to use the user's configured model)
 - `memory` — memory scope (`project`, `user`, or `false`)
-- `allowedTools` — Claude Code built-in tools only (capitalized names)
+- `tools` — Claude Code built-in tools only (capitalized names)
 - `mcpServers` — list of MCP server names available to this persona
 
 ### Fields That Only Exist in One Target
