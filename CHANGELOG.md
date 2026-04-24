@@ -2,7 +2,12 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
-## v2.4.2 - Claude Tools Fix
+## v2.5.0 - Tools Serializer & Target Differences Guide
+- Engine: Added `serializeToolsBlock()` for YAML block-sequence rendering of tools arrays.
+- Builder: Improved `tools` field rendering and validation in the persona builder.
+- Tests: Added serializer and extended target registry test cases.
+- Docs: Added target differences reference guide comparing VS Code and Claude Code behaviors.
+- Docs: Updated metadata reference, template syntax, API surface, and data-flows docs.
 - Builder: Claude-specific tools renamed from `allowedTools` to `tools`.
 
 ## v2.4.1 - Subagent Declarations
