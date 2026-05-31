@@ -110,7 +110,8 @@ MIT
 1. Add changelog entries (do not change package.json version)
 2. Commit all changes.
 3. `npm run build`.
-4. `npm version 0.0.0` - Updates package and lock versions + commit
-5. `npm publish` - Publish version on NPM
-6. `git push origin 0.0.0` - Add the tag in GIT
-7. Add the release on Github
+4. `npm login` if necessary.
+5. `npm version 0.0.0` - Updates package and lock versions + commit.
+6. `npm publish` - Publish on NPM.
+7. `git push origin v0.0.0` - Add the tag in GIT (note the `v`).
+8. Add the release on Github
