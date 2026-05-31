@@ -61,6 +61,9 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 | `{{#if flag}}…{{else}}…{{/if}}` | Conditional with fallback | `resolveConditionals()` |
 | `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` via pre-processor |
 | `{{variableName}}` | Variable substitution | `resolveVariables()` |
+| `\{{varName}}` | Escaped variable marker (literal pass-through, no warning) | `resolveVariables()` |
+
+> **Escape syntax note:** The backslash prefix is consumed by the engine and does **not** appear in the rendered output. `\{{varName}}` in a template produces `{{varName}}` verbatim in the final file — no substitution occurs and no unresolved-variable warning is emitted. To produce a literal `\{{varName}}` string in output (backslash included), use a double backslash: `\\{{varName}}` → `\{{varName}}`.
 
 **Processing order matters:** partials → conditionals → variables. Running them out of order will produce incorrect output.
 

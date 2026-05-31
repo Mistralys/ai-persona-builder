@@ -123,7 +123,7 @@ describe('resolveVariables()', () => {
   it('does not substitute {{> partial}} markers (non-word character after {{)', () => {
     const text = '{{> partial}}';
     const result = resolveVariables(text, {}, 'test.md');
-    // The regex /{{(\w+)}}/ does not match {{> partial}} because > is not \w
+    // The regex /(\\?){{(\w+)}}/ does not match {{> partial}} because > is not \w
     expect(result).toBe(text);
   });
 
@@ -135,5 +135,37 @@ describe('resolveVariables()', () => {
     // {{#if}} and {{/if}} contain non-word chars; the regex won't match them
     const result = resolveVariables(text, { flag: 'yes' }, 'test.md');
     expect(result).toBe(text);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Backslash escape syntax — \{{varName}} emits literal {{varName}}
+  // ---------------------------------------------------------------------------
+
+  it('returns the literal marker when the variable is present in context but escaped', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = resolveVariables('\\{{name}}', { name: 'Alice' }, 'test.md');
+    expect(result).toBe('{{name}}');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns the literal marker without warning when the escaped variable is absent from context', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = resolveVariables('\\{{missing}}', {}, 'test.md');
+    expect(result).toBe('{{missing}}');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('handles mixed escaped and unescaped markers correctly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = resolveVariables('\\{{a}} {{b}} \\{{c}}', { b: 'resolved' }, 'test.md');
+    expect(result).toBe('{{a}} resolved {{c}}');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('handles multiple occurrences of the same escaped marker', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = resolveVariables('\\{{x}} and \\{{x}}', {}, 'test.md');
+    expect(result).toBe('{{x}} and {{x}}');
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,24 @@ Values are sourced from the merged context built in this priority order (later l
 
 Plugin `onBuildContext` hooks run after step 4 and may contribute additional keys or override existing ones. Missing variables emit a warning to stderr but do not fail the build.
 
+### Escape Syntax
+
+Prefix a variable marker with a backslash to emit it as literal text, bypassing substitution and suppressing any unresolved-variable warning:
+
+```
+\{{variableName}}
+```
+
+The backslash is consumed by the engine; the output is the bare `{{variableName}}` marker with no substitution performed. This is useful when you need to show template syntax examples inside rendered output, or when you intentionally want to defer resolution to a downstream processor.
+
+**Double-backslash chaining:** The escape is applied to exactly one leading backslash. A double backslash (`\\{{variableName}}`) produces `\{{variableName}}` in the output — the first backslash acts as the escape character, and the second backslash passes through literally. This behaviour is consistent with standard template-engine escape chaining.
+
+| Input | Output |
+|-------|--------|
+| `\{{name}}` | `{{name}}` (literal, no substitution) |
+| `\\{{name}}` | `\{{name}}` (one backslash + literal marker) |
+| `{{name}}` | `Alice` (normal substitution, given `name = "Alice"`) |
+
 ## Partials
 
 ```

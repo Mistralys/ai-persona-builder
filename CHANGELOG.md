@@ -2,6 +2,9 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.5.1 - Variable Escaping
+- Engine: Added support for escaping variables with `\{{variable}}`.
+
 ## v2.5.0 - Tools Serializer & Target Differences Guide
 - Engine: Added `serializeToolsBlock()` for YAML block-sequence rendering of tools arrays.
 - Builder: Improved `tools` field rendering and validation in the persona builder.
