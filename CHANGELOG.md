@@ -3,13 +3,9 @@
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
 ## v2.6.0 - Changelog-Derived Versioning
-- Builder: `buildContext()` now derives `version` and `last_updated` from the per-persona
-  YAML `changelog` block scalar via `resolveChangelogMeta()`.
-- Builder: `buildAgentNameMap()` now derives persona version from `changelog` instead of
-  an explicit `version` field; falls back to `default_version` then `'0.0.0'`.
-- Builder: When `last_updated` is absent from all YAML sources, it is set to the date
-  extracted from the `changelog` field, or `''` when no date is present.
-- Tests: Added `tests/builders/changelog-version.test.ts` covering all five AC scenarios.
+- Builder: `version` and `last_updated` now derived from the YAML `changelog` block scalar.
+- Builder: Agent name map version now reads from `changelog`, falling back to `default_version`.
+- Tests: Added changelog-derived versioning test suite.
 
 ## v2.5.1 - Variable Escaping
 - Engine: Added support for escaping variables with `\{{variable}}`.
