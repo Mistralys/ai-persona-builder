@@ -829,10 +829,10 @@ describe('context derivation', () => {
     expect(summary.results[0].content).toContain('Version: 9.9.9');
   });
 
-  it('per-persona version overrides shared default_version', async () => {
+  it('per-persona changelog version overrides shared default_version', async () => {
     const { suiteDir, outDir } = await createMinimalSuite(testTmpDir, {
       sharedYaml: `default_version: '1.0.0'\n`,
-      personaYaml: `name: Versioned\ndescription: Desc.\nversion: '5.0.0'\nvs_file_name: test-persona.agent.md\ncc_file_name: test-persona.md\n`,
+      personaYaml: `name: Versioned\ndescription: Desc.\nchangelog: "5.0.0 (2026-01-01): Release"\nvs_file_name: test-persona.agent.md\ncc_file_name: test-persona.md\n`,
       contentMd: 'Version: {{version}}\n',
     });
 

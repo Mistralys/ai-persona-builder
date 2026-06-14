@@ -13,6 +13,8 @@ build(config)
   │     │     ├─ Load _shared.yaml → default_version fallback
   │     │     ├─ Discover persona YAML files
   │     │     └─ For each persona:
+  │     │           version = resolveChangelogMeta(persona.changelog)?.version
+  │     │                     ?? sharedMeta.default_version ?? '0.0.0'
   │     │           key   = "agent_" + slug (hyphens → underscores)     → "<name> v<version>"
   │     │           key   = "agent_slug_" + slug (hyphens → underscores) → slug (hyphens preserved)
   │     └─ Return agentMap: Record<string, string>
@@ -87,7 +89,8 @@ Template variables are resolved from a merged context object. Later values win:
 
 | Field | Source | Condition |
 |-------|--------|-----------|
-| `version` | `personaMeta.version` → `sharedMeta.default_version` → `'0.0.0'` | Always |
+| `version` | `resolveChangelogMeta(personaMeta.changelog)?.version` → `sharedMeta.default_version` → `'0.0.0'` | Always — unconditionally overwritten |
+| `last_updated` | `resolveChangelogMeta(personaMeta.changelog)?.date` → `''` | Only when absent from merged YAML |
 | `tools_list` | `serializeToolsList(tools)` | Always |
 | `tools_json` | `serializeTools(tools)` | Always |
 | `cc_tools_list` | `serializeToolsList(cc_tools ?? tools)` | Always |
@@ -102,7 +105,7 @@ Template variables are resolved from a merged context object. Later values win:
 | `agent_<slug>` | `"<name> v<version>"` for every persona across all suites; slug hyphens → underscores in key | Always |
 | `agent_slug_<slug>` | Raw hyphenated slug string for every persona; key uses underscores, value preserves hyphens | Always |
 
-Derived fields are only set when not already present in the merged context — explicit YAML values always win.
+Derived fields are only set when not already present in the merged context — explicit YAML values always win. **Exception: `version` is unconditionally overwritten** regardless of any `version:` key in per-persona YAML.
 
 > **`da_*` gate:** The `da_file_name_stem`, `da_tools_list`, `da_tools_json`, and `da_tools_block` fields are
 > gated on `da_file_name` being present in the merged context. Personas without `da_file_name`

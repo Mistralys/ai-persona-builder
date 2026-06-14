@@ -87,13 +87,14 @@ Both keys are injected at context merge step 4 (after derived fields, before pl
 ---
 ## Derived Context Fields
 
-Fields computed by `buildContext()` at build time (merge step 3). All are only set when not already present — YAML overrides always win.
+Fields computed by `buildContext()` at build time (merge step 3). Most are only set when not already present — YAML overrides always win. **Exception: `version` is unconditionally overwritten** — see note below.
 
 ### Standard Derived Fields (always injected)
 
 | Field | Derived from | Format |
 |-------|-------------|--------|
-| `version` | `version` → `default_version` → `'0.0.0'` | String |
+| `version` | `changelog` (via `resolveChangelogMeta`) → `default_version` → `'0.0.0'` | String |
+| `last_updated` | `changelog` date (via `resolveChangelogMeta`) → `''` | String |
 | `tools_list` | `tools` array | `'tool1', 'tool2'` |
 | `tools_json` | `tools` array | `['tool1', 'tool2']` |
 | `cc_tools_list` | `cc_tools` → fallback to `tools` | `'tool1', 'tool2'` |
@@ -101,6 +102,8 @@ Fields computed by `buildContext()` at build time (merge step 3). All are only s
 | `tools_block` | `tools` array | YAML block sequence |
 | `cc_tools_block` | `cc_tools` → fallback to `tools` | YAML block sequence |
 | `cc_file_name_stem` | `cc_file_name` with `.md` stripped | String |
+
+> **`version` derivation notes:** `version` is unconditionally overwritten by `buildContext()` — any `version:` in per-persona YAML is silently ignored. Derivation chain: `changelog` field (via `resolveChangelogMeta()`) → `default_version` → `'0.0.0'`. The `last_updated` row is conditional — only injected when absent from all YAML sources.
 
 ### Deep Agents Derived Fields (gated on `da_file_name` presence)
 
@@ -248,6 +251,50 @@ Reads a Markdown content template as a raw UTF-8 string. No parsing or template 
 ---
 
 ## Utility Functions
+
+### `ChangelogMeta` (interface)
+
+```ts
+export interface ChangelogMeta {
+  version: string; // Semver string, e.g. '1.5.0'
+  date: string;    // ISO date 'YYYY-MM-DD', or '' when absent
+}
+```
+
+Version and date metadata extracted from a changelog entry. `date` is an empty string when the entry has no date component.
+
+---
+
+### `resolveChangelogMeta(input)`
+
+```ts
+export function resolveChangelogMeta(input: unknown): ChangelogMeta | undefined;
+```
+
+Extracts `version` and `date` from the first matching line of a changelog block scalar. Accepts `unknown` input so callers can pass raw YAML values without casting. Returns `undefined` when the input is not a non-empty string or contains no recognisable semver entry line.
+
+Lines are inspected in order; the first line that contains a recognisable `X.Y.Z (YYYY-MM-DD):` or `X.Y.Z:` entry wins. Pure function — zero imports, no I/O, no side effects.
+
+**Supported entry formats:**
+- `X.Y.Z (YYYY-MM-DD): description` → `{ version: 'X.Y.Z', date: 'YYYY-MM-DD' }`
+- `X.Y.Z: description` → `{ version: 'X.Y.Z', date: '' }`
+
+**Returns `undefined` for:** `undefined`, `null`, `''`, non-string values, strings with no recognisable version line.
+
+```ts
+resolveChangelogMeta('1.5.0 (2026-06-13): Added feature')
+// => { version: '1.5.0', date: '2026-06-13' }
+
+resolveChangelogMeta('1.5.0: Added feature')
+// => { version: '1.5.0', date: '' }
+
+resolveChangelogMeta(undefined)
+// => undefined
+```
+
+Exported from the `@mistralys/persona-builder` package via the `src/utils/index.ts` barrel and the root `src/index.ts` barrel.
+
+---
 
 ### `escapeRegExp(str)`
 

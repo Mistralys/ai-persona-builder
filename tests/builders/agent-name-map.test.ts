@@ -161,7 +161,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'my-great-agent.yaml',
-          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nversion: '3.0.0'\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
+          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nchangelog: \"3.0.0 (2026-01-01): Initial version\"\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
           content: '# {{name}}\n\nGreat!\n',
         },
       ],
@@ -207,7 +207,7 @@ describe('cross-suite agent name map', () => {
         {
           filename: 'some-helper.yaml',
           // No slug field — should fall back to filename stem "some-helper"
-          yaml: "name: Some Helper\ndescription: Test persona\nversion: '1.5.0'\nvs_file_name: some-helper.agent.md\ncc_file_name: some-helper.md\n",
+          yaml: "name: Some Helper\ndescription: Test persona\nchangelog: \"1.5.0 (2026-01-01): Initial version\"\nvs_file_name: some-helper.agent.md\ncc_file_name: some-helper.md\n",
           content: '# {{name}}\n\nHelping!\n',
         },
       ],
@@ -391,7 +391,7 @@ describe('cross-suite agent name map', () => {
       personas: [
         {
           filename: 'helper.yaml',
-          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nversion: '2.0.0'\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
           content: '# {{name}}\n\nHelping!\n',
         },
       ],
@@ -416,9 +416,9 @@ describe('cross-suite agent name map', () => {
 
     const summary = await build(config);
     const consumerResult = summary.results.find((r) => r.suite === 'suite-a');
-    // The explicit YAML field should win, not the computed "Helper v2.0.0"
+    // The explicit YAML field should win, not the computed agent map entry
     expect(consumerResult!.content).toContain('Invoke Custom Override here.');
-    expect(consumerResult!.content).not.toContain('Helper v2.0.0');
+    expect(consumerResult!.content).not.toContain('Helper v1.0.0');
   });
 });
 
@@ -444,7 +444,7 @@ describe('agent_slug_* keys', () => {
       personas: [
         {
           filename: 'helper.yaml',
-          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nversion: '2.0.0'\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
+          yaml: "slug: helper\nname: Helper\ndescription: Test persona\nvs_file_name: helper.agent.md\ncc_file_name: helper.md\n",
           content: '# {{name}}\n',
         },
       ],
@@ -494,7 +494,7 @@ describe('agent_slug_* keys', () => {
       personas: [
         {
           filename: 'my-great-agent.yaml',
-          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nversion: '3.0.0'\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
+          yaml: "slug: my-great-agent\nname: My Great Agent\ndescription: Test persona\nvs_file_name: my-great-agent.agent.md\ncc_file_name: my-great-agent.md\n",
           content: '# {{name}}\n',
         },
       ],
@@ -537,7 +537,7 @@ describe('agent_slug_* keys', () => {
         },
         {
           filename: 'beta.yaml',
-          yaml: "slug: beta\nname: Beta Agent\ndescription: Test persona\nversion: '5.0.0'\nvs_file_name: beta.agent.md\ncc_file_name: beta.md\n",
+          yaml: "slug: beta\nname: Beta Agent\ndescription: Test persona\nchangelog: \"5.0.0 (2026-01-01): Initial version\"\nvs_file_name: beta.agent.md\ncc_file_name: beta.md\n",
           content: '# {{name}}\n',
         },
       ],

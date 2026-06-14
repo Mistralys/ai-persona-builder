@@ -77,9 +77,10 @@ from the merged context using `{{fieldName}}` syntax.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `string` | Persona version string. Falls back to `default_version` in `_shared.yaml`, then to `'0.0.0'`. |
+| `changelog` | `string` | Persona version history as a changelog block scalar. `buildContext()` calls `resolveChangelogMeta()` on this field to derive the `version` and `last_updated` context variables automatically. First matching entry wins. Supported formats: `X.Y.Z (YYYY-MM-DD): …` or `X.Y.Z: …`. See [Utility Functions — `resolveChangelogMeta`](agents/project-manifest/api-surface.md#resolveclhanglogmetainput) for the full parsing rules. |
+| `version` | `string` | **Inert when `changelog` is present.** If provided without a `changelog` field, it was previously used as the persona version string — however, `buildContext()` now unconditionally derives `version` from `changelog` (or `default_version`, then `'0.0.0'`). Any `version:` value in per-persona YAML is silently overwritten. Use `changelog` instead. |
 | `author` | `string` | Author name. Useful for frontmatter or documentation. |
-| `last_updated` | `string` | ISO 8601 date string (e.g. `'2026-04-01'`). |
+| `last_updated` | `string` | ISO 8601 date string (e.g. `'2026-04-01'`). Explicit YAML values are preserved. When absent, `buildContext()` derives it from the `changelog` date component (empty string if the changelog entry has no date). |
 | `id` | `string` | Machine-friendly identifier. Used by some plugins for registry lookups. |
 | `role` | `string` | Role name. Used by plugins that validate personas against a workflow manifest (e.g. the ledger plugin). |
 
@@ -97,7 +98,7 @@ The file is excluded from persona discovery by its `_` prefix — it is never bu
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `default_version` | `string` | Suite-wide version fallback (e.g. `'1.0.0'`). Used when a persona YAML omits `version`. |
+| `default_version` | `string` | Suite-wide version fallback (e.g. `'1.0.0'`). Used when a persona YAML has no `changelog` field (or the changelog has no parseable version entry). |
 | `author` | `string` | Default author applied to every persona in the suite. |
 | `last_updated` | `string` | Default last-updated date. |
 | `cc_permission_mode` | `string` | Suite-wide Claude Code permission mode (Tier 3). |
@@ -125,7 +126,8 @@ They are available in all templates but do **not** need to appear in YAML.
 
 | Variable | Derived from | Description |
 |----------|-------------|-------------|
-| `{{version}}` | `version` → `default_version` → `'0.0.0'` | Resolved version string |
+| `{{version}}` | `changelog` (via `resolveChangelogMeta`) → `default_version` → `'0.0.0'` | Resolved version string. Always derived from `changelog`; any `version:` in per-persona YAML is silently overwritten. |
+| `{{last_updated}}` | `changelog` date (via `resolveChangelogMeta`) → `''` | ISO date string, or empty string. Only injected when absent from all YAML sources. |
 | `{{tools_list}}` | `tools` array | Comma-separated quoted tool names: `'read', 'write'` |
 | `{{tools_json}}` | `tools` array | JSON array with outer brackets: `['read', 'write']` |
 | `{{tools_block}}` | `tools` array | YAML block sequence: `\n  - read\n  - write`; or ` []` when empty |

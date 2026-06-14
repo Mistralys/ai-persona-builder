@@ -152,7 +152,23 @@ longer exported by this package. Any code that imports from
 `@mistralys/persona-builder/plugins/ledger` will receive an `ERR_PACKAGE_PATH_NOT_EXPORTED`
 error at runtime.
 
-### 7. Partial Nesting Depth Cap Is Fixed at 2
+### 8. Changelog-Derived Versioning
+
+`version` and `last_updated` in the template context are **always derived by `buildContext()` from the `changelog` YAML field** — they must not be set manually in per-persona YAML.
+
+**Changelog entry format:**
+- With date: `X.Y.Z (YYYY-MM-DD): Description of changes`
+- Without date: `X.Y.Z: Description of changes`
+
+`resolveChangelogMeta()` inspects lines in order and returns the first match. The derivation chains are:
+- `version`: `resolveChangelogMeta(changelog)?.version` → `default_version` → `'0.0.0'`
+- `last_updated`: `resolveChangelogMeta(changelog)?.date` → `''` (only injected when absent from YAML)
+
+**Rules:**
+1. Set `changelog:` as a YAML block scalar in per-persona YAML to control the rendered version and date.
+2. Do **not** add a `version:` key to per-persona YAML — it is silently overwritten by `buildContext()` and has no effect.
+3. Do **not** add a `last_updated:` key to per-persona YAML for version-date purposes — let it be derived from the `changelog` field. Explicit `last_updated:` in YAML is preserved but will not be overridden by the changelog date.
+4. The `default_version` key in `_shared.yaml` remains valid as a suite-wide fallback for personas with no `changelog` field.
 
 `resolvePartials()` uses a hardcoded recursion depth cap of `2`. This supports a "partial → nested partial → innermost partial" chain (two levels of nesting), but a third level is **not expanded** — the `{{> name}}` marker is left as-is in the output. This cap is **not configurable** via `BuildConfig` or any other option.
 

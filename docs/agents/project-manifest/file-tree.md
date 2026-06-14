@@ -52,6 +52,7 @@
 │   │
 │   └── utils/                      # Shared utility functions
 │       ├── index.ts                # Barrel re-export
+│       ├── changelog.ts            # resolveChangelogMeta() — changelog block scalar parser
 │       └── regex.ts                # escapeRegExp() — safe RegExp string escaping
 │
 ├── tests/
@@ -73,6 +74,7 @@
 │   ├── builders/                   # Builder tests (125 tests)
 │   │   ├── agent-name-map.test.ts
 │   │   ├── build-config-variables-and-partials.test.ts
+│   │   ├── changelog-version.test.ts  # changelog-derived version + last_updated (12 tests)
 │   │   ├── config-partials-and-on-partials.test.ts
 │   │   ├── config-suite-variables.test.ts
 │   │   ├── da-computed-fields.test.ts
@@ -83,6 +85,8 @@
 │   ├── validators/                 # Validator tests (46 tests)
 │   │   ├── filename-validator.test.ts
 │   │   └── strict-validator.test.ts
+│   ├── utils/                      # Utility tests (25 tests)
+│   │   └── changelog.test.ts       # resolveChangelogMeta() unit tests
 │   └── integration/                # End-to-end integration tests (20 tests)
 │       └── build.test.ts
 │

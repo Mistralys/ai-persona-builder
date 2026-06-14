@@ -60,6 +60,7 @@ import {
 } from '../plugins/runner.js';
 
 import { resolveFrontmatterTemplate, renderFrontmatter } from './frontmatter.js';
+import { resolveChangelogMeta } from '../utils/changelog.js';
 import type { BuildConfig, BuildResult, BuildSummary } from './types.js';
 import type { PersonaBuildPlugin, PersonaMetadata, SuiteConfig, TargetType, ValidationResult } from '../plugins/types.js';
 import { defaultRegistry } from '../targets/built-in.js';
@@ -219,10 +220,8 @@ async function buildAgentNameMap(
           ? persona['name']
           : slug;
 
-      const version =
-        typeof persona['version'] === 'string'
-          ? persona['version']
-          : defaultVersion;
+      const clMeta = resolveChangelogMeta(persona['changelog']);
+      const version = clMeta?.version ?? defaultVersion;
 
       const underscoredSlug = slug.replace(/-/g, '_');
       const key = `agent_${underscoredSlug}`;
@@ -279,12 +278,10 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
     configVariables,
     suiteVariables,
   } = options;
+  const clMeta = resolveChangelogMeta(personaMeta['changelog']);
   const version =
-    typeof personaMeta['version'] === 'string'
-      ? personaMeta['version']
-      : typeof sharedMeta['default_version'] === 'string'
-        ? sharedMeta['default_version']
-        : '0.0.0';
+    clMeta?.version ??
+    (typeof sharedMeta['default_version'] === 'string' ? sharedMeta['default_version'] : '0.0.0');
 
   // Merge base: configVariables first (lowest priority), then suiteVariables,
   // then sharedMeta, then personaMeta (highest priority among YAML sources).
@@ -295,6 +292,11 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
     ...personaMeta,
     version,
   };
+
+  // Derive last_updated from changelog date when not already provided by YAML
+  if (!('last_updated' in merged)) {
+    merged['last_updated'] = clMeta?.date ?? '';
+  }
 
   // ── Derived convenience fields (only set when not already provided) ───────
   // tools_list / tools_json — serialized from the `tools` array if present
