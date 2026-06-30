@@ -249,6 +249,46 @@ string value — you choose the convention that suits your project.
 
 ---
 
+## Built-in Validators
+
+The library exports two validator functions that plugins can use inside `onValidate` hooks:
+
+### `validateStrictMarkers(renderedContent, requiredMarkers)`
+
+Checks that every string in `requiredMarkers` appears verbatim somewhere in `renderedContent`.
+Returns one `error`-severity `ValidationResult` per missing marker.
+
+This is useful when a plugin injects required content via partials or `onPostRender` and wants to
+guarantee that content was not accidentally removed or overridden by a template author:
+
+```ts
+import { validateStrictMarkers, type PersonaBuildPlugin, type ValidationResult } from '@mistralys/persona-builder';
+
+const markerPlugin: PersonaBuildPlugin = {
+  name: 'strict-markers',
+
+  onValidate(persona, suite, target): ValidationResult[] {
+    // Verify that specific strings appear in the final rendered output.
+    // The rendered content is not available in onValidate — this validator
+    // is typically called from onPostRender or by collecting the rendered
+    // output externally and validating after the build.
+    return [];
+  },
+};
+```
+
+> **Note:** `validateStrictMarkers` operates on already-rendered output strings. It is a pure
+> function with no I/O. Call it wherever you have access to the rendered persona content.
+
+### `validateSubagentRefs(persona, agentMap)`
+
+Validates that every slug declared in `persona.subagents` has a corresponding `agent_slug_*` key
+in `agentMap`. Called automatically by `buildPersona()` during the validation phase. See
+[Metadata Reference — Sub-Agent Declarations](metadata-reference.md#tier-4c--sub-agent-declarations)
+for the full sub-agent lifecycle.
+
+---
+
 ## Ledger Plugin — Migrated
 
 > **Moved in v2.0.0** — The ledger plugin has been removed from this library and migrated to the

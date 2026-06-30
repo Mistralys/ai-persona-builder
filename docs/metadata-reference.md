@@ -68,6 +68,52 @@ references them.
 | Field | Type | Fallback | Description |
 |-------|------|----------|-----------|
 | `da_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Deep Agents target. Only consumed when `da_file_name` is also set. Exposed as `{{da_tools_list}}`, `{{da_tools_json}}`, and `{{da_tools_block}}` in the template context. |
+
+---
+
+## Tier 4c — Sub-Agent Declarations
+
+| Field | Type | Required? | Description |
+|-------|------|-----------|-------------|
+| `subagents` | `string[]` | Optional | Slugs of other personas this persona may delegate work to as sub-agents. Each slug must match a persona discoverable across all configured suites. |
+
+The `subagents` field declares cross-suite delegation relationships. At build time,
+`validateSubagentRefs()` checks every declared slug against the cross-suite agent map built by
+`buildAgentNameMap()` during the pre-scan phase. An `error`-severity `ValidationResult` is
+emitted for each slug that has no corresponding persona in any configured suite.
+
+**YAML example:**
+
+```yaml
+name: Project Manager
+slug: project-manager
+subagents:
+  - wp-decomposer
+  - dependency-sequencer
+  - pipeline-configurator
+```
+
+**How slug resolution works:**
+
+1. Every persona across all configured suites contributes its `slug` (or filename stem) to a
+   global agent map during the pre-scan phase.
+2. For each slug in `subagents`, the validator looks up the key `agent_slug_{slug}` (with
+   hyphens replaced by underscores) in the map.
+3. If the key is missing, the slug is reported as unresolved.
+
+**Strict mode:** When `strict: true` is set in `BuildConfig`, unresolved subagent slugs cause
+the build to fail. Without strict mode, unresolved slugs are reported in
+`BuildResult.validationResults` but do not halt the build.
+
+**Template access:** The raw `subagents` array is available in the template context via
+`{{subagents}}`, but its primary purpose is validation — not template rendering. To reference
+another persona's display name or slug in template prose, use the cross-suite agent variables
+`{{agent_<slug>}}` and `{{agent_slug_<slug>}}` (see [Auto-Derived Context
+Variables](#auto-derived-context-variables)).
+
+> **Absence is valid:** Personas that omit `subagents` (or declare an empty list) pass
+> validation silently.
+
 ---
 
 ## Tier 5 — Optional / Convention Fields
@@ -77,12 +123,13 @@ from the merged context using `{{fieldName}}` syntax.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `changelog` | `string` | Persona version history as a changelog block scalar. `buildContext()` calls `resolveChangelogMeta()` on this field to derive the `version` and `last_updated` context variables automatically. First matching entry wins. Supported formats: `X.Y.Z (YYYY-MM-DD): …` or `X.Y.Z: …`. See [Utility Functions — `resolveChangelogMeta`](agents/project-manifest/api-surface.md#resolveclhanglogmetainput) for the full parsing rules. |
-| `version` | `string` | **Inert when `changelog` is present.** If provided without a `changelog` field, it was previously used as the persona version string — however, `buildContext()` now unconditionally derives `version` from `changelog` (or `default_version`, then `'0.0.0'`). Any `version:` value in per-persona YAML is silently overwritten. Use `changelog` instead. |
+| `changelog` | `string` | Persona version history as a changelog block scalar. `buildContext()` calls `resolveChangelogMeta()` on this field to derive the `version` and `last_updated` context variables automatically. First matching entry wins. Supported formats: `X.Y.Z (YYYY-MM-DD): …` or `X.Y.Z: …`. See [Utility Functions — `resolveChangelogMeta`](agents/project-manifest/api-surface.md#resolvechangelogmetainput) for the full parsing rules. |
+| `version` | `string` | **Always overwritten — do not set manually.** `buildContext()` unconditionally derives `version` from `changelog` → `default_version` → `'0.0.0'`. Any `version:` value in per-persona YAML is silently ignored. Use the `changelog` field to control the rendered version. |
 | `author` | `string` | Author name. Useful for frontmatter or documentation. |
 | `last_updated` | `string` | ISO 8601 date string (e.g. `'2026-04-01'`). Explicit YAML values are preserved. When absent, `buildContext()` derives it from the `changelog` date component (empty string if the changelog entry has no date). |
 | `id` | `string` | Machine-friendly identifier. Used by some plugins for registry lookups. |
 | `role` | `string` | Role name. Used by plugins that validate personas against a workflow manifest (e.g. the ledger plugin). |
+| `displayName` | `string` | Human-readable display name. When present, used instead of `name` in contexts where a user-friendly label is preferred. Falls back to `name` when absent. |
 
 ---
 

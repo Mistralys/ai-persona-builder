@@ -84,6 +84,79 @@ const summary = await build({
 });
 ```
 
+## Creating a Custom Target
+
+The three built-in targets (`vscode`, `claude-code`, `deep-agents`) cover the most common output
+formats. To add a fourth target — for example, a custom platform — register a `TargetDefinition`
+before calling `build()`.
+
+### TargetDefinition fields
+
+| Field | Type | Required? | Description |
+|-------|------|-----------|-------------|
+| `name` | `string` | Yes | Unique target identifier (e.g. `'my-platform'`). |
+| `outputDirKey` | `string` | Yes | Key used to look up the output directory in `SuiteConfig.outputDirs`. Typically the same as `name`. |
+| `defaultFrontmatter` | `string` | Yes | Default frontmatter template string. Used when no plugin or config override is provided. |
+| `filenameContextKey` | `string` | No | Context field holding a custom output filename (e.g. `'mp_file_name'`). When absent, the output filename falls back to the content file's basename. |
+| `contextFlags` | `Record<string, unknown>` | No | Flags auto-injected into the template context when this target is active. Convention: `{ target_<name>: true }` (hyphens → underscores). |
+| `defaultEnabled` | `boolean` | No | Whether this target is included when `BuildConfig.targets` is not set. Defaults to `true` when omitted. Set to `false` if the target should only build when explicitly requested. |
+
+### End-to-end example
+
+```ts
+import { build, defaultRegistry } from '@mistralys/persona-builder';
+import path from 'node:path';
+
+// 1. Register the target before calling build()
+defaultRegistry.register({
+  name: 'my-platform',
+  outputDirKey: 'my-platform',
+  defaultFrontmatter: `---
+name: {{name}}
+version: {{version}}
+---`,
+  filenameContextKey: 'mp_file_name',   // reads from persona YAML → mp_file_name
+  contextFlags: { target_my_platform: true },
+  defaultEnabled: false,                 // only builds when explicitly listed
+});
+
+// 2. Request the target in BuildConfig.targets
+const summary = await build({
+  targets: ['vscode', 'claude-code', 'my-platform'],
+  suites: {
+    'my-suite': {
+      srcDir: path.resolve('./personas/my-suite'),
+      outputDirs: {
+        vscode: path.resolve('./dist/vscode'),
+        'claude-code': path.resolve('./dist/claude-code'),
+        'my-platform': path.resolve('./dist/my-platform'),  // key = outputDirKey
+      },
+    },
+  },
+});
+```
+
+**In persona YAML**, set the custom filename field if you registered a `filenameContextKey`:
+
+```yaml
+name: My Persona
+slug: my-persona
+mp_file_name: my-persona.custom.md
+```
+
+**In content templates**, use the `contextFlags` to write target-conditional content:
+
+```md
+{{#if target_my_platform}}
+Content shown only in My Platform builds.
+{{/if}}
+```
+
+> **Test isolation:** `defaultRegistry` is a module-level singleton. In tests, use
+> `defaultRegistry.clone()` to avoid polluting the registry across test cases.
+
+---
+
 For detailed type definitions, see:
 - [Configuration Reference](configuration.md) — `BuildConfig`, `SuiteConfig`, `BuildSummary`
 - [Plugins](plugins.md) — `PersonaBuildPlugin`, `ValidationResult`

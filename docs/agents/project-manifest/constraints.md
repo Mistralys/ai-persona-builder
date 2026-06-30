@@ -90,6 +90,8 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 **Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]`.
 
+> **User-facing reference:** See [Metadata Reference — Sub-Agent Declarations](../../metadata-reference.md#tier-4c--sub-agent-declarations) for YAML examples, slug resolution walkthrough, and template access patterns.
+
 ---
 
 ### 8. Planned `onPreRender` Hook — Not Yet Implemented

@@ -44,7 +44,10 @@ The backslash is consumed by the engine; the output is the bare `{{variableName}
 {{> partialName}}
 ```
 
-Partials are loaded from the `partials/` directory and resolved up to 2 levels deep.
+Partials are loaded from the `partials/` directory and resolved up to 2 levels deep (one partial
+can include another partial, which can include a third). Partial references beyond the depth limit
+are **left as-is** in the output — the `{{> name}}` marker is preserved verbatim with no error or
+warning. This cap is not configurable.
 
 ## Conditionals
 
@@ -169,7 +172,20 @@ tools:{{cc_tools_block}}
 ---
 ```
 
-Override these via `BuildConfig.frontmatter` or via a plugin's `frontmatterTemplates`.
+### Frontmatter Template Precedence
+
+Frontmatter templates are resolved through a four-layer precedence chain (first match wins):
+
+1. **Plugin `frontmatterTemplates`** — the first registered plugin that has a template for the
+   active target wins (highest priority)
+2. **`BuildConfig.frontmatter`** — config-level override keyed by target name
+3. **`TargetDefinition.defaultFrontmatter`** — the default template declared in the target’s
+   registry entry
+4. **Library fallback** — the built-in Claude Code template (used for unrecognised custom targets
+   that provide no default)
+
+Override via `BuildConfig.frontmatter` for project-wide customisation, or via a plugin's
+`frontmatterTemplates` for plugin-scoped customisation that takes precedence over everything else.
 
 ## Required YAML Fields per Target
 
