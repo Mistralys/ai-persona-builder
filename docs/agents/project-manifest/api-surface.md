@@ -344,6 +344,96 @@ Validates that every slug declared in `persona.subagents` has a corresponding `a
 
 ---
 
+## Frontmatter Quick Reference
+
+This section consolidates the frontmatter essentials that are otherwise spread across `data-flows.md`, `metadata-reference.md`, and `target-differences.md`. For the full story on any item, follow the cross-references.
+
+### Default Frontmatter Templates
+
+The library ships three built-in frontmatter templates. Consumers can override them via `BuildConfig.frontmatter` (config-level) or `PersonaBuildPlugin.frontmatterTemplates` (plugin-level). See **Frontmatter Template Precedence** in `data-flows.md` §3.
+
+**VS Code** (`DEFAULT_FRONTMATTER_VSCODE`):
+
+```yaml
+---
+name: '{{name}} v{{version}}'
+description: '{{description}}'
+tools: [{{tools_list}}]
+---
+```
+
+**Claude Code** (`DEFAULT_FRONTMATTER_CLAUDE_CODE`):
+
+```yaml
+---
+name: {{cc_file_name_stem}}
+description: {{description}}
+model: {{cc_model}}
+memory: {{cc_memory}}
+tools:{{cc_tools_block}}
+---
+```
+
+**Deep Agents** (`DEFAULT_FRONTMATTER_DEEP_AGENTS`):
+
+```yaml
+---
+name: {{name}}
+description: {{description}}
+---
+```
+
+### Metadata → Frontmatter Field Map
+
+Which YAML fields feed which frontmatter fields in the default templates:
+
+| Frontmatter field | Target | YAML source → derivation |
+|-------------------|--------|--------------------------|
+| `name` | VS Code | `name` + `version` (auto-derived from `changelog`) |
+| `name` | Claude Code | `cc_file_name` → `cc_file_name_stem` (`.md` stripped) |
+| `name` | Deep Agents | `name` (plain) |
+| `description` | all | `description` (pass-through) |
+| `tools` | VS Code | `tools[]` → `tools_list` (comma-separated, quoted) |
+| `tools` | Claude Code | `cc_tools[]` → `cc_tools_block` (YAML block seq); falls back to `tools[]` |
+| `model` | Claude Code | `cc_model` — **not auto-derived**; must be in YAML or `_shared.yaml` |
+| `memory` | Claude Code | `cc_memory` — **not auto-derived**; must be in YAML or `_shared.yaml` |
+
+### Common Pitfalls
+
+- **`version` is always overwritten.** Never set `version:` manually in per-persona YAML — use the `changelog` block scalar instead. See `metadata-reference.md` Tier 5.
+- **`cc_model` and `cc_memory` are not auto-derived.** They must be supplied explicitly (typically via `_shared.yaml`). Missing values produce `[WARN]` unless `strict: true` is set.
+- **No frontmatter schema validation.** The library warns about unresolved `{{variables}}` but does not validate that rendered frontmatter is valid YAML or that required fields for a target platform are present.
+- **Deep Agents template is minimal.** Only `name` and `description`. Any additional fields (tools, model, etc.) require a custom template via config or plugin.
+- **Custom target fallback.** Targets not named `'vscode'`, `'claude-code'`, or `'deep-agents'` receive the Claude Code default template unless overridden.
+
+### What Each Platform Consumes
+
+| Field | VS Code reads? | Claude Code reads? | Deep Agents reads? |
+|-------|---------------|-------------------|-------------------|
+| `name` | Yes — display name in agent picker | Yes — `@agent-<name>` routing | Yes — agent identifier |
+| `description` | Yes — placeholder text in chat input | Yes — trigger text for auto-delegation | Yes — agent description |
+| `tools` | Yes — controls tool permissions | Yes — tool allowlist (omit to inherit) | No |
+| `disallowedTools` | No | Yes — tool denylist | No |
+| `model` | Yes — single model or prioritized array | Yes — selects the LLM | No |
+| `effort` | No | Yes — reasoning effort override | No |
+| `maxTurns` | No | Yes — caps agentic turns | No |
+| `memory` | No | Yes — `project` / `user` / `local` / `false` | No |
+| `permissionMode` | No | Yes — edit approval mode | No |
+| `mcpServers` | No | Yes — scoped MCP servers | No |
+| `agents` | Yes — subagent access control | No (uses `Agent()` in `tools`) | No |
+| `background` | No | Yes — run as background task | No |
+| `isolation` | No | Yes — `worktree` for git worktree isolation | No |
+| `skills` | No | Yes — preload skill content | No |
+| `handoffs` | Yes — suggested next-step buttons | No | No |
+| `hooks` | Preview (requires setting) | Yes — lifecycle hooks | No |
+| `id` | Yes — `@id` subagent routing | No | No |
+
+> **Note:** Fields like `role`, `author`, `version`, `last_updated`, and `vs_file_name` are metadata for human/agent orientation — they are not consumed by the host platforms' runtime.
+>
+> See [Target Differences](../target-differences.md) for the complete field references: [VS Code Agent Fields](../target-differences.md#complete-vs-code-agent-field-reference), [Claude Code Agent Fields](../target-differences.md#complete-claude-code-field-reference), and [Skill Frontmatter (Cross-Platform)](../target-differences.md#skill-frontmatter-cross-platform).
+
+---
+
 ## Frontmatter Functions
 
 ### `resolveFrontmatterTemplate(target, plugins, configTemplates?)`

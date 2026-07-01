@@ -46,8 +46,8 @@ true` is set.
 
 | Field | Type | Template variable | Description |
 |-------|------|-------------------|-------------|
-| `cc_model` | `string` | `{{cc_model}}` | Claude Code model identifier (e.g. `claude-sonnet-4-5`) |
-| `cc_memory` | `string \| boolean` | `{{cc_memory}}` | Claude Code memory setting (e.g. `project`, `false`) |
+| `cc_model` | `string` | `{{cc_model}}` | Claude Code model identifier — `sonnet`, `opus`, `haiku`, `fable`, a full model ID (e.g. `claude-sonnet-4-5`), or `inherit` |
+| `cc_memory` | `string \| boolean` | `{{cc_memory}}` | Claude Code memory setting — `user`, `project`, `local`, or `false` |
 
 These fields are **not auto-derived** by `buildContext()`. They pass through from YAML to the
 template context unchanged. If you override the default Claude Code frontmatter template via a
