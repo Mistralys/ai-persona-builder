@@ -2,6 +2,9 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v2.6.1 - Bundle Documentation
+- Docs: All documentation is now bundled in the NPM package to keep it available.
+
 ## v2.6.0 - Changelog-Derived Versioning
 - Builder: `version` and `last_updated` now derived from the YAML `changelog` block scalar.
 - Builder: Agent name map version now reads from `changelog`, falling back to `default_version`.
