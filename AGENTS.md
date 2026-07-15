@@ -248,6 +248,7 @@ Produces dual CJS + ESM output via tsup into `dist/`. Two entry points are compi
 | Check naming rules or invariants | [constraints.md](docs/agents/project-manifest/constraints.md) |
 | Understand the tech stack | [tech-stack.md](docs/agents/project-manifest/tech-stack.md) |
 | Understand VS Code vs Claude Code differences | [target-differences.md](docs/target-differences.md) |
+| Build skills with custom targets | [building-skills.md](docs/building-skills.md) |
 | See test fixtures | `fixtures/sample-suite/` and `fixtures/shared/` |
 | Run tests | `npm test` |
 | Build the library | `npm run build` |

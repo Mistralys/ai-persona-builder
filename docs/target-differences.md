@@ -258,7 +258,9 @@ Claude Code supports additional frontmatter fields beyond what the default `@mis
 
 ### Skill Frontmatter (Cross-Platform)
 
-Skills (`SKILL.md` files) use a separate frontmatter schema — they are **not** built by `@mistralys/persona-builder`. VS Code and Claude Code now follow the same open standard ([agentskills.io](https://agentskills.io)) for cross-tool portability.
+Skills (`SKILL.md` files) use a different frontmatter schema than personas. While persona-builder's built-in targets (`vscode`, `claude-code`, `deep-agents`) produce persona output, the [`TargetRegistry`](../agents/project-manifest/api-surface.md#targetregistry) API can register custom skill targets with skill-appropriate frontmatter templates. See the [Building Skills](building-skills.md) guide for a complete walkthrough.
+
+VS Code and Claude Code now follow the same open standard ([agentskills.io](https://agentskills.io)) for cross-tool portability.
 
 **Locations:** project — `.github/skills/`, `.claude/skills/`, `.agents/skills/`; personal — `~/.copilot/skills/`, `~/.claude/skills/`, `~/.agents/skills/`.
 
@@ -309,7 +311,16 @@ Skills (`SKILL.md` files) use a separate frontmatter schema — they are **not**
 | `shell` | — | Optional | `bash` (default) or `powershell` for inline commands. |
 
 > **Key asymmetry:** Claude Code's `context: fork` lets you target a named agent via the `agent` field; VS Code's fork is currently agent-agnostic (spins up a generic subagent).
->
+
+**Skill-Drives-Agent pattern (Claude Code):** When a skill declares both `context: fork` and `agent: <name>`, invoking the skill spins up an isolated subagent running under that agent's system prompt, tools, and model. The skill body becomes the driving prompt for the forked subagent, and only its summary returns to the main conversation. The `agent` value must match the `name` field of an agent file in `.claude/agents/` (built-in agents like `Explore`, `Plan`, and `general-purpose` also work).
+
+This is the inverse of the **Agent-Preloads-Skills** direction, where you put a `skills:` list in a subagent's frontmatter to preload skill content into that subagent's context at startup. The two patterns serve different use cases:
+
+| Pattern | Frontmatter | Who drives | Use case |
+|---------|-------------|------------|----------|
+| Skill drives agent | `context: fork` + `agent:` on the **skill** | The skill body is the prompt | Run a specific task under an agent's persona (e.g. invoke an audit skill that delegates to a Curator agent) |
+| Agent preloads skills | `skills:` on the **agent** | The user's message is the prompt | Give an agent domain knowledge at startup (e.g. a coding agent that always has style-guide skills loaded) |
+
 > **VS Code loading model:** VS Code uses three-level progressive loading — `name`/`description` are always visible, the SKILL.md body loads only on invocation, and supporting files in the skill directory load only when referenced.
 
 ### Fields That Only Exist in One Target

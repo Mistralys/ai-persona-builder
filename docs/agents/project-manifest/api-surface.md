@@ -795,6 +795,8 @@ export interface TargetDefinition {
 
 Describes a build target. `name` is the unique target identifier (e.g. `'vscode'`). `outputDirKey` maps to the suite's output directory key. `filenameContextKey` names the build-context field holding a custom output filename for this target. `defaultFrontmatter` is the template used when no plugin or `BuildConfig` override is provided. `contextFlags` is a **declarative** map of context injections (e.g. `{ target_vscode: true }`) — consumed by the runtime via registry-driven lookup (`registry.get(target).contextFlags`). Each key-value pair is injected into the build context for the corresponding target, enabling conditional template rendering. When a target is not present in the registry, the engine falls back to injecting a single boolean via string replacement (`target_${name.replace(/-/g, '_')} = true`). `defaultEnabled` controls whether the target is included in the default build when no explicit `targets` array is configured — defaults to `true` when omitted; set to `false` for opt-in targets (e.g. `'deep-agents'`).
 
+> **Custom targets for non-persona content:** `TargetDefinition` is not limited to personas — any document type with its own frontmatter schema (e.g. skills) can be built by registering a custom target with the appropriate `defaultFrontmatter` template. See the [Building Skills](../../building-skills.md) guide for an end-to-end example.
+
 ### `ValidationResult`
 
 ```ts

@@ -119,8 +119,14 @@ Plugin frontmatterTemplates     (first registered plugin with target key wins)
    ↓ fallback
 BuildConfig.frontmatter         (config-level override)
    ↓ fallback
-Library defaults                (DEFAULT_FRONTMATTER_VSCODE / DEFAULT_FRONTMATTER_CLAUDE_CODE)
+registry.get(target).defaultFrontmatter   (target definition default)
+   ↓ fallback
+Library defaults                (DEFAULT_FRONTMATTER_CLAUDE_CODE — last resort)
 ```
+
+For custom targets (e.g. skill targets), provide `defaultFrontmatter` in the `TargetDefinition` at
+registration time. This eliminates the need for plugin or config-level overrides. See the
+[Building Skills](../../building-skills.md) guide for a worked example.
 
 ## 4. Partials Resolution
 

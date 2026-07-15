@@ -141,6 +141,8 @@ The loaders (`loadPartials`, `discoverPersonaYamls`, `loadContent`) pass caller-
 
 `resolveFrontmatterTemplate()` resolves the frontmatter template via the precedence chain: plugin `frontmatterTemplates` → `BuildConfig.frontmatter` → `registry.get(target).defaultFrontmatter` → library default (`DEFAULT_FRONTMATTER_CLAUDE_CODE`). Custom targets that provide a `defaultFrontmatter` in their `TargetDefinition` do not need to supply a plugin or config override.
 
+This extensibility mechanism supports non-persona content types — e.g. skills can be built by registering custom targets with skill-appropriate frontmatter templates. See the [Building Skills](../../building-skills.md) guide.
+
 **Two-registry limitation:** `buildPersona()` and `buildSuite()` accept an optional `registry` parameter that defaults to `defaultRegistry`. If a consumer passes a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and calls these functions directly without the registry argument, their custom targets will not be visible. Pass the same registry instance explicitly to avoid this, or call `build()` to have it forwarded automatically.
 
 ### 6. Ledger Plugin Removed in v2.0.0
