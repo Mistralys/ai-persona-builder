@@ -430,7 +430,7 @@ Which YAML fields feed which frontmatter fields in the default templates:
 
 > **Note:** Fields like `role`, `author`, `version`, `last_updated`, and `vs_file_name` are metadata for human/agent orientation — they are not consumed by the host platforms' runtime.
 >
-> See [Target Differences](../target-differences.md) for the complete field references: [VS Code Agent Fields](../target-differences.md#complete-vs-code-agent-field-reference), [Claude Code Agent Fields](../target-differences.md#complete-claude-code-field-reference), and [Skill Frontmatter (Cross-Platform)](../target-differences.md#skill-frontmatter-cross-platform).
+> See [Target Differences](../../target-differences.md) for the complete field references: [VS Code Agent Fields](../../target-differences.md#complete-vs-code-agent-field-reference), [Claude Code Agent Fields](../../target-differences.md#complete-claude-code-field-reference), and [Skill Frontmatter (Cross-Platform)](../../target-differences.md#skill-frontmatter-cross-platform).
 
 ---
 

@@ -258,7 +258,7 @@ Claude Code supports additional frontmatter fields beyond what the default `@mis
 
 ### Skill Frontmatter (Cross-Platform)
 
-Skills (`SKILL.md` files) use a different frontmatter schema than personas. While persona-builder's built-in targets (`vscode`, `claude-code`, `deep-agents`) produce persona output, the [`TargetRegistry`](../agents/project-manifest/api-surface.md#targetregistry) API can register custom skill targets with skill-appropriate frontmatter templates. See the [Building Skills](building-skills.md) guide for a complete walkthrough.
+Skills (`SKILL.md` files) use a different frontmatter schema than personas. While persona-builder's built-in targets (`vscode`, `claude-code`, `deep-agents`) produce persona output, the [`TargetRegistry`](agents/project-manifest/api-surface.md#targetregistry) API can register custom skill targets with skill-appropriate frontmatter templates. See the [Building Skills](building-skills.md) guide for a complete walkthrough.
 
 VS Code and Claude Code now follow the same open standard ([agentskills.io](https://agentskills.io)) for cross-tool portability.
 

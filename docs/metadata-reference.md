@@ -130,6 +130,13 @@ from the merged context using `{{fieldName}}` syntax.
 | `id` | `string` | Machine-friendly identifier. Used by some plugins for registry lookups. |
 | `role` | `string` | Role name. Used by plugins that validate personas against a workflow manifest (e.g. the ledger plugin). |
 | `displayName` | `string` | Human-readable display name. When present, used instead of `name` in contexts where a user-friendly label is preferred. Falls back to `name` when absent. |
+| `identity` | `string` | **ai-insights convention.** Short role title used in the `**Identity: {{identity}}.**` mission header line. Required in every ai-insights persona; used by `generate-agents-overview.js` for the overview document. Example: `"Staff Software Engineer"`. |
+| `use_when` | `string` | **ai-insights convention.** One-line description of when to invoke this persona. Used by `generate-agents-overview.js`. Applies to standalone and ledger-support personas. |
+| `key_behavior` | block scalar | **ai-insights convention.** Newline-delimited list of notable behavior points. Used by `generate-agents-overview.js` (first line rendered). Applies to all personas where notable behavior is documented. |
+| `modes` | block scalar | **ai-insights convention.** Newline-delimited list of operating modes. Used by `generate-agents-overview.js`. Applies to personas with distinct operating modes. |
+| `inputs` | `string` | **ai-insights convention.** What this persona receives as input. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
+| `outputs` | `string` | **ai-insights convention.** What this persona produces as output. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
+| `notes` | `string` | **ai-insights convention.** Optional freeform note rendered as a **Notes:** bullet in the overview. Example: `"Runs in parallel with the Plan Auditor; never blocks it"`. |
 
 ---
 
