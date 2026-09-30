@@ -1,6 +1,6 @@
 # Research Brief
 
-Rework of `docs/agents/plans/2026-09-30-persona-targets-and-tool-validation/synthesis.md`, extended with the
+Rework of `docs/agents/implementation-history/2026-09-30-persona-targets-and-tool-validation/synthesis.md`, extended with the
 bug report `docs/agents/bug-reports/command-whitespace-handling.md` (both in `ai-persona-builder/`).
 
 ## Scope Sketch
@@ -24,6 +24,9 @@ bug report `docs/agents/bug-reports/command-whitespace-handling.md` (both in `ai
 - Callers: `ai-persona-builder/src/builders/persona-builder.ts` L472 (body: `resolvePartials` → `resolveConditionals` → `resolveVariables` → `collapseBlankLines` → `ensureBlankLineBeforeHeadings` → `trimEnd`, L471–L476); `ai-persona-builder/src/builders/frontmatter.ts` L98–L106 `renderFrontmatter()` (conditionals → variables on the frontmatter template). Exported from the package root via `ai-persona-builder/src/engine/index.ts` L9 and `ai-persona-builder/src/index.ts` L9 (`export * from './engine/index.js'`).
 - `ai-persona-builder/src/engine/postProcessor.ts`: `collapseBlankLines()` (L18–L20) turns `\n{4,}` into `\n\n\n` — it caps runs at **two** blank lines, not one. `ensureBlankLineBeforeHeadings()` (L33–L41) re-inserts blank lines before headings and around `---`; its JSDoc (L25–L28) cites "conditionals add only a single `\n` delimiter" as a reason it exists.
 - `ai-persona-builder/src/engine/partials.ts` L18, L46–L47: every resolved partial is `trimEnd()`-ed — the second reason `ensureBlankLineBeforeHeadings()` exists; unaffected by the conditional fix.
+- [added by: Plan Architect Reviewer; verified by Planner 2026-09-30] `ai-persona-builder/src/builders/persona-builder.ts` L472 calls `resolveConditionals(body, context)` directly (import at L43); `ai-persona-builder/src/builders/frontmatter.ts` L18 imports `resolveConditionals` from `../engine/conditionals.js`, L103 calls it.
+- [added by: Planner, design-review integration 2026-09-30] These two builder call sites are the only callers of `resolveConditionals` in `ai-persona-builder/src/`. No direct caller exists in `ai-insights/scripts/`, `ai-insights/personas/plugins/` or `ai-insights/personas/persona-build.config.js` (grep). No direct-API consumer of `resolveConditionals` relies on it handling comments.
+- [added by: Plan Architect Reviewer, unverified] `ai-insights/vitest.config.ts` (L1-L9): `globals: true`, `include: ['scripts/tests/**/*.test.{js,ts}']`, `environment: 'node'`, no `testTimeout`, no projects.
 
 ### Established Patterns
 - Zero-import engine modules, no cross-module references — `ai-persona-builder/docs/agents/project-manifest/constraints.md` §"1. Zero-Dependency Engine Layer" (L21–L23).
@@ -146,10 +149,11 @@ bug report `docs/agents/bug-reports/command-whitespace-handling.md` (both in `ai
   {{/if}}role: {{role}}
   ```
   Under "remove inline tags only" semantics this renders `model: 'x'\nrole: …` (truthy) and `role: …` (falsy) — identical to today.
+- [added by: Planner, design-review integration 2026-09-30] Kept-branch edge blanks: 4 branches start with a blank line directly after their opener tag. They are `ai-insights/personas/shared/partials/planner-output-template.md` L5–L6, L12–L13 and L114–L115, and `ai-insights/personas/shared/partials/planner-research-brief-template.md` L30–L31. In all four, the opener line directly follows a content line or a `{{/if}}` line, with no blank line above. No branch ends with a blank line before `{{else}}`, `{{else if}}` or `{{/if}}` (awk scan over the same directories). So no consumer site has a blank run on both sides of a tag line whose branch is kept. A blank-run merge limited to blocks that emit nothing, plus removed comments, renders the consumer exactly like a merge at every block boundary.
 - Other frontmatter templates (`frontmatter-templates.js` L54–L56, L75–L84; `persona-build.config.js` L40–L62) use standalone tag lines with no blank lines — must stay tight.
 - `ai-insights/personas/shared/partials/documentation-ownership.md` L14–L47: the three joined-paragraph cases from the bug report (blank lines at L14, L29, L37 next to tags).
 - Rendered output directories (gitignored, e.g. `/personas/ledger/claude-code/*.md` in `ai-insights/.gitignore` L26): `personas/{ledger,standalone,ledger-support}/{vs-code,claude-code,deep-agents}` per `ai-insights/personas/persona-build.config.js` L105–L130.
-- Dev link in place: `ai-insights/personas/node_modules/@mistralys/persona-builder -> ../../../../ai-persona-builder` (created 2026-09-30 per `…/2026-09-30-persona-targets-and-tool-validation/dev-linking.md`). The wrapper runs the built `dist/cli.js`, so the library must be rebuilt after each source change (dev-linking.md "Rebuild rule").
+- Dev link in place: `ai-insights/personas/node_modules/@mistralys/persona-builder -> ../../../../ai-persona-builder` (created 2026-09-30 with `ln -s ../../../../ai-persona-builder ai-insights/personas/node_modules/@mistralys/persona-builder`, per the prior plan's step 1 at `ai-persona-builder/docs/agents/implementation-history/2026-09-30-persona-targets-and-tool-validation/plan.md` L244; the `dev-linking.md` that plan proposed was never created). The wrapper runs the built `dist/cli.js`, so the library must be rebuilt (`npm run build`) after each source change. The prior plan's revert command is `cd ai-insights/personas && rm node_modules/@mistralys/persona-builder && npm ci` (its plan.md L250); `personas/package.json` L12 currently declares `"@mistralys/persona-builder": "^2.6.0"`, so after a range bump the reinstall must be `npm install`.
 
 ### Constraints
 - Only the conditional-engine change may alter rendered output; expected diff = blank lines added, nothing else.
@@ -192,3 +196,19 @@ bug report `docs/agents/bug-reports/command-whitespace-handling.md` (both in `ai
 - Insight `48607cdb-51a9-4483-a9ec-28b4ead77b23` (global): test guards with a synthetic failing fixture, not only clean real data.
 - Insight `660d8039-d438-4402-b7e4-dd9578a6d576` (ai-insights): partial tags at column 0 — unaffected (partials engine unchanged).
 - No stored insight describes `resolveElseIf()` or the conditional whitespace behaviour (repository search returned none), so no insight is overtaken by the engine rewrite.
+
+## Area: AI Insights Persona Docs (added by audit)
+
+Verified by the Planner during audit integration (2026-09-30). Entries below were checked against the files; line numbers hold.
+
+
+- [added by: Plan Auditor, verified by Planner 2026-09-30] `ai-insights/personas/docs/agents/project-manifest/api-surface.md` L75-L86 "Template Processing Order" (4-phase code block) and L104-L141 "Conditionals" (nested blocks "resolved innermost-first") describe the pipeline the plan changes.
+- [added by: Plan Auditor, verified by Planner 2026-09-30] `ai-insights/personas/docs/persona-build-system.md` L96-L99 (template engine order list), L159ff (Conditionals) and L510-L530 (`{{agent_slug_*}}` check description) document pipeline and wrapper behaviour.
+- [added by: Plan Auditor, verified by Planner 2026-09-30] `ai-insights/AGENTS.md` L107 maintenance rule: "Change template syntax" -> `api-surface.md` (template syntax section); L109 "Change build script function" -> `api-surface.md`.
+- [added by: Plan Auditor, verified by Planner 2026-09-30] The prior plan's `synthesis.md` and `plan.md` live in `ai-persona-builder/docs/agents/implementation-history/2026-09-30-persona-targets-and-tool-validation/`; no `dev-linking.md` exists anywhere under `DEV/` (excluding node_modules).
+- [added by: Plan Auditor, verified by Planner 2026-09-30] `ai-insights/scripts/build-personas.js`: library `dist/index.cjs` is `_require`d only at L494 inside the sub-agent-reference block, after the agent_slug block (L371-L458).
+- [added by: Plan Auditor, verified by Planner 2026-09-30] Subprocess-spawning `ai-insights/scripts/tests/*.test.js`: backfill-duration, generate-agents-overview, install-mcp, cli-cmd-agent, publish-skills (direct); store-commands (via `scripts/lib/store-commands.js`).
+- [added by: Planner, audit integration 2026-09-30] `ai-insights/personas/docs/persona-build-system.md` further sections the change touches: L101 post-build sentence ("Post-build (real builds only): the wrapper script generates `personas/name-mapping.json` and syncs `personas/package.json` version"); L105–L116 "Validation Steps" table, whose `{{agent_slug_*}}` row reads "Every build + `--check`" / "Error"; L492ff "Subagent Declarations", where "How It Works" step 3 says the build script scans every ledger content file and L525–L533 show the `[ERROR] agent_slug cross-reference check failed:` message.
+- [added by: Planner, audit integration 2026-09-30] `ai-insights/personas/docs/agents/project-manifest/api-surface.md` L88 "## Template Syntax" has subsections Partials (L90), Conditionals (L104), Variables (L142), Computed Variables (L150), Platform Feature Flags (L170); there is no comments subsection. L75–L86 lists four phases: `resolvePartials()`, `resolveConditionals()`, `resolveVariables()`, `collapseBlankLines()`.
+- [added by: Planner, audit integration 2026-09-30] `ai-insights/scripts/build-personas.js` L493–L507: the sub-agent-reference block runs `_require(…/dist/index.cjs)` (L494), `_require(CONFIG)` (L495) and `await build({ ...config, check: true })` (L496) with no `try/catch`, then `process.exit(1)` on errors. `_require` is `createRequire(import.meta.url)` (L20).
+- [added by: Plan Auditor, unverified] `ai-insights/scripts/build-personas.js` L60-L62: the library CLI `execFileSync` catch is the only CLI exit (`process.exit(err.status ?? 1)`); the other `process.exit(1)` calls sit at L456, L474 and L505 (slug, insight-fields, sub-agent-reference checks). `ai-insights/scripts/lib/` currently has no `build-checks.js` or `agent-slug-validation.js`, and `scripts/tests/helpers/` does not exist yet.
