@@ -116,6 +116,42 @@ mcpServers:
 | MCP server declaration | Embedded in `tools` array | Separate `mcpServers` frontmatter field |
 | Tool list YAML field | `tools` | `cc_tools` (falls back to `tools` if absent) |
 
+### Capability Correspondence & Cross-Target Validation
+
+The library maps a small set of basic capabilities to each target's tool names, and uses that map
+to catch the mistakes above automatically — you don't need to remember the notation rules by
+heart. This correspondence is deliberately **rough**: only the capabilities below are mapped, and
+any tool with no counterpart on the other target (VS Code's `vscode`, `browser`; any custom or
+extension tool) is silently ignored by every check.
+
+| Capability | VS Code (`tools`) | Claude Code (`cc_tools`) |
+|------------|--------------------|---------------------------|
+| `execute` | `execute` | `Bash` |
+| `read` | `read` | `Read` |
+| `edit` | `edit` | `Edit`, `Write` |
+| `search` | `search` | `Grep`, `Glob` |
+| `web` | `web` | `WebFetch`, `WebSearch` |
+| `dispatch` | `agent` | `Task`, `Agent` |
+| `todo` | `todo` | `TodoRead`, `TodoWrite` |
+| `mcp:<server>` | `server/*`, `server/tool` | `mcp__server`, `mcp__server__tool` |
+
+Deep Agents declares no capability map at all — the orchestrator always provides its own `task`
+tool, so Deep Agents personas carry no tool grants to validate.
+
+Three build-time checks read this map:
+
+- **Dispatch grant.** A persona that declares `subagents` (or otherwise triggers a configured
+  `BuildConfig.toolRequirements` rule, e.g. a handoff partial) must grant a `dispatch`-mapped tool
+  on every mapped target it is built for. A missing grant is an **error**.
+- **Capability parity.** A persona built for two or more mapped targets must grant the same mapped
+  capabilities on each — see §4 below for the exemption mechanism.
+- **Foreign notation.** A tool name spelled in another target's notation (e.g. `read` appearing in
+  `cc_tools`) produces a **warning** naming the recognising target and the current target's own
+  equivalent tool names.
+
+See `docs/agents/project-manifest/api-surface.md` (**Target Tool Capability Resolution**) for the
+underlying `TargetDefinition.toolCapabilities` / `mcpToolPattern` fields and resolver functions.
+
 ---
 
 ## 3. Frontmatter Differences
@@ -401,6 +437,26 @@ cc_tools:
 Same pattern — `da_tools` overrides the tool list for the Deep Agents target. Falls back to
 `tools` when absent. Only injected when `da_file_name` is set.
 
+### Exempting Intentional Differences — `tool_parity_exceptions`
+
+Sometimes a capability difference between targets is intentional — a target genuinely has no
+equivalent for a tool the other grants. List the capability name in `tool_parity_exceptions` to
+exempt it from the parity check for that persona:
+
+```yaml
+# VS Code has browser-based web access; Claude Code has no counterpart for it
+tool_parity_exceptions:
+  - web
+```
+
+- Only capability *names* from the correspondence table above (or an `mcp:<server>` form) are
+  recognised — an unrecognised name produces a **warning** in `BuildSummary.issues` (it silently
+  exempts nothing, so the typo is surfaced rather than swallowed).
+- Exceptions are per-persona and apply across every target pair — there is no per-target-pair
+  exception.
+- An exempted capability is skipped by the parity check entirely; it does **not** silence the
+  dispatch-grant or foreign-notation checks, which are independent.
+
 ---
 
 ## 5. Content Template Conditionals
@@ -482,6 +538,9 @@ Before submitting persona changes, verify:
 | 8 | Claude Code frontmatter fields | Include `model` and `memory` — they have no VS Code equivalent; `description` is also referenced by the default template |
 | 9 | Version in name | VS Code `name` includes version (`v1.0.0`); Claude Code `name` does not |
 | 10 | Target conditionals | Use `{{#if target_vscode}}` / `{{#if target_claude_code}}` for platform-specific content |
+| 11 | Dispatch grant | A persona that declares `subagents` (or triggers a `toolRequirements` rule) needs a `dispatch`-mapped tool (`agent` / `Task`, `Agent`) on every target it builds for — the build now catches a missing grant as an error |
+| 12 | Capability parity | Granting a mapped capability (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`, `mcp:<server>`) on one target but not another now fails the build unless it's listed in `tool_parity_exceptions` — see §4 |
+| 13 | Foreign tool notation | Writing `read`/`edit` etc. into `cc_tools`, or `Read`/`Edit` etc. into `tools`, now produces a foreign-notation warning naming the correct equivalent |
 
 ---
 

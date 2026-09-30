@@ -2,6 +2,41 @@
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
+## v3.0.0 - Persona Targets & Tool Validation (proposed)
+> The version number is a proposal only — the final release version is set by the maintainer at
+> publish time.
+- **Breaking:** Error-severity validation results now fail every build (and the CLI exits `1`)
+  with or without `--strict` — previously only `strict` mode failed on them. This includes the
+  unknown-sub-agent-slug error, which was silently ignored outside `strict` mode until now.
+  `--strict` continues to additionally fail on warning-severity results.
+- Builder: Personas can declare `targets: [...]` in YAML to build for a subset of registered
+  targets; excluded persona × target pairs are skipped entirely (no render, no write) and recorded
+  in `BuildSummary.skipped`.
+- Builder: A new cross-suite persona pre-scan (`scanPersonas()` / `PersonaIndex`) replaces the
+  former name-map-only scan; it resolves each persona's `targets` and `tool_parity_exceptions`
+  once, feeding both the target-skip logic and the agent name map.
+- Validators: `validateSubagentRefs()` (relocated to `src/validators/subagent-validator.ts` and
+  exported) additionally flags a sub-agent slug that exists but isn't built for the target
+  currently being built.
+- Validators: Added `validateToolRequirements()` — a persona that declares `subagents` (or
+  triggers a `BuildConfig.toolRequirements` rule) must grant a `dispatch`-capability tool on every
+  mapped target it builds for; a tool spelled in another target's notation now raises a warning.
+- Validators: Added `validateToolParity()` — a persona built for two or more mapped targets must
+  grant the same capabilities (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`,
+  `mcp:<server>`) on each, except capabilities listed in the persona's `tool_parity_exceptions`.
+- Targets: `TargetDefinition` gained `toolsContextKey`, `toolCapabilities`, and `mcpToolPattern` —
+  the shared capability vocabulary driving all three checks above and `buildContext()`'s
+  `cc_tools`/`da_tools` fallback. `TargetRegistry.register()` now rejects an `mcpToolPattern`
+  carrying the `g` or `y` flag.
+- Builder: `BuildResult` gained `effectiveTools`; `BuildSummary` gained `skipped`, `issues`,
+  `errors`, and `warnings`.
+- Engine: Added `collectPartialReferences()`, a pure zero-import function reporting which partials
+  a template transitively references (mirrors `resolvePartials()`'s depth-2 cap).
+- CLI: Prints every error and warning grouped by suite/target/persona, plus index-level issues,
+  the skipped-persona count, and error/warning totals.
+- Tests: Added coverage for the persona index, target resolution, tool requirements, tool parity,
+  and build success semantics.
+
 ## v2.6.1 - Bundle Documentation
 - Docs: All documentation is now bundled in the NPM package to keep it available.
 

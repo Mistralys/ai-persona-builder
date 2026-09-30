@@ -14,7 +14,7 @@
 |----------|----------|
 | [README.md](docs/agents/project-manifest/README.md) | Project overview, version, and manifest index. |
 | [tech-stack.md](docs/agents/project-manifest/tech-stack.md) | Runtime, frameworks, architectural patterns, build tooling, distribution format. |
-| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (22 source files, 15 test files, fixtures). |
+| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (35 source files, 35 test files, fixtures). |
 | [api-surface.md](docs/agents/project-manifest/api-surface.md) | All exported types, functions, and constants — signatures only. |
 | [data-flows.md](docs/agents/project-manifest/data-flows.md) | Build pipeline, context merge order, plugin hooks, CLI flow. |
 | [constraints.md](docs/agents/project-manifest/constraints.md) | Architectural invariants, naming rules, known limitations. |
@@ -128,7 +128,7 @@ Unclear → Pause and request user clarification
 | **Architecture** | Layered: builders → plugins → engine / loaders / validators |
 | **Package Manager** | npm |
 | **Build Tool** | tsup (dual CJS + ESM) |
-| **Test Framework** | Vitest (236 tests across 15 files) |
+| **Test Framework** | Vitest (620 tests across 35 files) |
 | **Production Dependency** | `js-yaml` (sole) |
 | **License** | MIT |
 
@@ -179,7 +179,7 @@ See [`docs/agents/project-manifest/file-tree.md`](docs/agents/project-manifest/f
 npm test
 ```
 
-Runs all Vitest tests once (236 tests across 15 files). Use `npm run test:watch` during development.
+Runs all Vitest tests once (620 tests across 35 files). Use `npm run test:watch` during development.
 
 ### Build Command
 

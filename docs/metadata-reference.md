@@ -79,8 +79,20 @@ references them.
 
 The `subagents` field declares cross-suite delegation relationships. At build time,
 `validateSubagentRefs()` checks every declared slug against the cross-suite agent map built by
-`buildAgentNameMap()` during the pre-scan phase. An `error`-severity `ValidationResult` is
-emitted for each slug that has no corresponding persona in any configured suite.
+`agentNameMapFromIndex()` (derived from the `scanPersonas()` pre-scan) during the pre-scan phase.
+An `error`-severity `ValidationResult` is emitted for each slug that has no corresponding persona
+in any configured suite. When a `PersonaIndex` is available (the case for `buildSuite()`/`build()`
+callers), a second, independent check flags a slug that resolves to a real persona whose resolved
+`targets` exclude the target currently being built — e.g. a persona built for `claude-code` naming
+a sub-agent that is only built for `vscode`.
+
+> **Dispatch-grant requirement.** Declaring `subagents` also triggers the built-in
+> `SUBAGENT_DISPATCH_REQUIREMENT` tool-requirement check: this persona must grant a
+> `dispatch`-capability tool (`agent` on VS Code; `Task` or `Agent` on Claude Code) on every
+> mapped target it is built for, or the build gets an `error`-severity "ungranted dispatch"
+> finding on that target — independent of whether the `subagents` slugs themselves resolve. See
+> [Target Differences — Capability Correspondence](target-differences.md#capability-correspondence--cross-target-validation)
+> and [API Reference — Dispatch-grant and foreign-notation validation](api.md#dispatch-grant-and-foreign-notation-validation).
 
 **YAML example:**
 
@@ -101,9 +113,12 @@ subagents:
    hyphens replaced by underscores) in the map.
 3. If the key is missing, the slug is reported as unresolved.
 
-**Strict mode:** When `strict: true` is set in `BuildConfig`, unresolved subagent slugs cause
-the build to fail. Without strict mode, unresolved slugs are reported in
-`BuildResult.validationResults` but do not halt the build.
+**Build failure:** Unresolved subagent slugs are reported as an error-severity `ValidationResult`
+in `BuildResult.validationResults`, which fails the build (`BuildSummary.success = false`, CLI
+exit 1) by default — with or without `strict: true`. `strict: true` additionally throws (after
+all suites have built) rather than just returning a failed summary; see
+[Configuration Reference — BuildSummary](configuration.md#buildsummary) and
+[Configuration Reference — `strict`](configuration.md#buildconfig).
 
 **Template access:** The raw `subagents` array is available in the template context via
 `{{subagents}}`, but its primary purpose is validation — not template rendering. To reference
@@ -113,6 +128,42 @@ Variables](#auto-derived-context-variables)).
 
 > **Absence is valid:** Personas that omit `subagents` (or declare an empty list) pass
 > validation silently.
+
+---
+
+## Tier 4d — Per-Target Persona Selection
+
+| Field | Type | Required? | Description |
+|-------|------|-----------|-------------|
+| `targets` | `string[]` | Optional | Target names this persona builds for. Absent → every registered target. A declared subset → only those targets. An unknown target name, a non-string entry, or an empty array each produce an `error`-severity `ValidationResult` (the offending entry is dropped rather than failing the whole field). Duplicate entries are silently removed. |
+| `tool_parity_exceptions` | `string[]` | Optional | Capability names exempted from the cross-target tool-parity check for this persona. Defaults to `[]` when absent. |
+
+Both fields are read and resolved by `scanPersonas()` during the pre-scan phase
+(`src/builders/persona-index.ts`), which populates a `PersonaIndex` entry per persona with the
+resolved `targets` list, the raw `declaredTargets` value, and `toolParityExceptions`.
+
+> **Fully enforced.** `targets` is fully enforced: `scanPersonas()` resolves it for every persona,
+> and `buildSuite()` / `build()` skip rendering (and writing) a persona for each excluded target,
+> recording the skip in `BuildSummary.skipped`. A direct `buildPersona()` call is unaffected by
+> `targets` — it always builds the exact persona × target it's given. The cross-target tool-parity
+> check is enforced too: after all suites × targets have built, `build()` runs a post-pass
+> (`validateToolParity()`, see [API Reference — Cross-target tool-parity
+> validation](api.md#cross-target-tool-parity-validation)) that compares each persona's granted
+> capabilities across its built targets and appends an error-severity `ValidationResult` to each
+> lacking target's `BuildResult.validationResults` for every mismatched capability not listed in
+> `tool_parity_exceptions`. An unrecognized name in `tool_parity_exceptions` is flagged as a
+> warning-severity issue by `scanPersonas()`, not silently ignored.
+
+**YAML example:**
+
+```yaml
+name: Docs-Only Agent
+slug: docs-only-agent
+targets:
+  - claude-code
+tool_parity_exceptions:
+  - dispatch
+```
 
 ---
 
