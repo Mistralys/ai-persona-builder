@@ -7,31 +7,46 @@ The main `build(config)` entry point orchestrates the entire pipeline:
 ```
 build(config)
   │
-  ├─ Pre-scan: buildAgentNameMap(config)
+  ├─ Pre-scan: scanPersonas(config, registry) → agentNameMapFromIndex(index)
   │     │
   │     ├─ For each suite in config.suites:
   │     │     ├─ Load _shared.yaml → default_version fallback
-  │     │     ├─ Discover persona YAML files
+  │     │     ├─ Discover persona YAML files (via persona-files.ts helpers)
   │     │     └─ For each persona:
   │     │           version = resolveChangelogMeta(persona.changelog)?.version
   │     │                     ?? sharedMeta.default_version ?? '0.0.0'
-  │     │           key   = "agent_" + slug (hyphens → underscores)     → "<name> v<version>"
-  │     │           key   = "agent_slug_" + slug (hyphens → underscores) → slug (hyphens preserved)
+  │     │           targets = resolvePersonaTargets(persona.targets, registry, yamlPath)
+  │     │                     (absent → every registered target; invalid/empty → [] + issue)
+  │     │           toolParityExceptions = persona.tool_parity_exceptions ?? []
+  │     │           → recorded as one PersonaIndexEntry in PersonaIndex.entries / .bySlug
+  │     ├─ Return PersonaIndex: { entries, bySlug, issues }
+  │     │
+  │     └─ agentNameMapFromIndex(index), derived from the same PersonaIndex (single scan —
+  │           cannot disagree with the per-persona target/exception data):
+  │           key   = "agent_" + slug (hyphens → underscores)     → "<name> v<version>"
+  │           key   = "agent_slug_" + slug (hyphens → underscores) → slug (hyphens preserved)
   │     └─ Return agentMap: Record<string, string>
   │
   ├─ For each suite in config.suites:
   │     │
-  │     ├─ buildSuite(suiteName, suiteConfig, config, plugins, agentMap)
+  │     ├─ For each target in targets:
   │     │     │
-  │     │     ├─ Load _shared.yaml → sharedMeta
-  │     │     ├─ Load partials (BuildConfig.partials → shared → suite-local overlay) → partialsMap
-  │     │     ├─ Run onSuiteInit hooks on all plugins
-  │     │     ├─ Run onPartials hooks on all plugins (accumulating partialsMap)
-  │     │     ├─ Discover persona YAML files (meta/*.yaml, excluding _*.yaml)
-  │     │     │
-  │     │     └─ For each persona × each target:
+  │     │     └─ buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap, registry, personaIndex)
   │     │           │
-  │     │           └─ buildPersona(yamlPath, …, target, agentMap)
+  │     │           ├─ Load _shared.yaml → sharedMeta
+  │     │           ├─ Load partials (BuildConfig.partials → shared → suite-local overlay) → partialsMap
+  │     │           ├─ Run onSuiteInit hooks on all plugins
+  │     │           ├─ Run onPartials hooks on all plugins (accumulating partialsMap)
+  │     │           ├─ Discover persona YAML files (meta/*.yaml, excluding _*.yaml)
+  │     │           ├─ Look up each YAML's resolved targets from personaIndex (self-scan this
+  │     │           │   suite alone when personaIndex is omitted — a direct buildSuite() call)
+  │     │           │
+  │     │           └─ For each persona whose resolved targets include `target`:
+  │     │                 │   (an excluded persona is skipped here — no context built, no
+  │     │                 │    plugin hooks run, nothing written; build() records it in
+  │     │                 │    BuildSummary.skipped)
+  │     │                 │
+  │     │                 └─ buildPersona(yamlPath, …, target, agentMap)
   │     │                 │
   │     │                 ├─ 1. Load persona YAML → personaMeta
   │     │                 ├─ 2. Merge context (BuildConfig.variables → SuiteConfig.variables →
@@ -53,14 +68,37 @@ build(config)
   │     │                 │     └─ ensureBlankLineBeforeHeadings
   │     │                 ├─ 9. Assemble output (frontmatter + body)
   │     │                 ├─ 10. Run onPostRender hooks (output chain)
-  │     │                 ├─ 11. Run onValidate hooks + validateSubagentRefs() (collect ValidationResults)
+  │     │                 ├─ 11. Run onValidate hooks + validateSubagentRefs() + validateToolRequirements()
+  │     │                 │      (when target has a registered TargetDefinition) — collect
+  │     │                 │      ValidationResults; also resolves effectiveTools via resolveTargetTools()
+  │     │                 │      onto BuildResult
   │     │                 ├─ 12. Determine output path (vs_file_name / cc_file_name)
   │     │                 └─ 13. Write file (unless check mode)
   │     │
-  │     └─ Collect BuildResult[]
+  │     └─ Collect BuildResult[] (filtered — excluded personas already skipped, not just omitted)
+  │
+  ├─ Capability-parity post-pass (validateToolParity(), src/validators/tool-parity-validator.ts):
+  │     ├─ Group all collected BuildResult[] by personaYamlPath
+  │     ├─ For each group, keep only results whose target has a registered TargetDefinition
+  │     │   (a capability map to resolve against) and a defined effectiveTools
+  │     ├─ resolveCapabilities(effectiveTools, definition) for each surviving result →
+  │     │   one TargetCapabilitySet per target
+  │     ├─ validateToolParity(personaLabel, perTarget, toolParityExceptions) — a persona
+  │     │   with < 2 surviving TargetCapabilitySets yields no findings
+  │     └─ Append each returned ToolParityFinding.result to its target's own
+  │         BuildResult.validationResults — before strictFailures is computed, so parity
+  │         errors participate in both the default (non-strict) and `strict: true` failure paths
   │
   ├─ Aggregate results → BuildSummary
-  ├─ If strict: check for error/warning ValidationResults → strictFailures
+  │     ├─ skipped: for each PersonaIndexEntry × active target where target ∉ entry.targets,
+  │     │   push { suite, target, personaYamlPath } — derived from the same personaIndex
+  │     │   buildSuite() used, so it cannot disagree with what was actually skipped
+  │     └─ issues: personaIndex.issues, copied verbatim
+  ├─ strictFailures: unconditionally collect every error/warning ValidationResult from every
+  │     result's validationResults plus issues (not gated behind `strict` — see Build Success
+  │     Semantics below); errors/warnings counts derived from it
+  ├─ success = errors === 0 && (!strict || warnings === 0); if strict and !success, throw after
+  │     all suites have built (files may already be written — combine strict with check for CI)
   └─ Return BuildSummary
 ```
 
@@ -171,8 +209,11 @@ persona-build [flags]
   ├─ Load config file (dynamic import: .js ESM / .cjs / .json)
   ├─ Merge CLI flags into BuildConfig
   ├─ Call build(config)
-  ├─ Report results to stdout
-  └─ Exit code: 0 (success) or 1 (strict failure)
+  ├─ printSummary(): print every error/warning (with suite/target/persona, or the index-level
+  │     issue's own embedded path), the skipped-persona count, and error/warning/built/written
+  │     totals
+  └─ Exit code: 0 (success) or 1 (!summary.success — any error by default, or a thrown build,
+        or any warning when --strict)
 ```
 
 ## 7. Output File Naming

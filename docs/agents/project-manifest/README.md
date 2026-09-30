@@ -43,4 +43,4 @@ These rules govern this manifest itself, not the library:
 
 ---
 
-**Manifest last revised:** 2026-08-26
+**Manifest last revised:** 2026-09-30

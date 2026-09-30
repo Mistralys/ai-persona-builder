@@ -24,9 +24,9 @@ Package version string sourced from `package.json` at runtime via `createRequire
 export async function build(config: BuildConfig): Promise<BuildSummary>;
 ```
 
-Main entry point. Pre-scans all suites to build a cross-suite agent name map (`agent_*` display-name variables and `agent_slug_*` raw-slug variables), then iterates all suites × targets, orchestrates the full pipeline (discover → load → render → validate → write), and returns an aggregated summary. Respects `check` (no writes) and `strict` (fail on warnings/errors) flags.
+Main entry point. Pre-scans all suites via `scanPersonas()` to build a `PersonaIndex` (see **Persona Index and Target Resolution** below), derives the cross-suite agent name map from it via `agentNameMapFromIndex()` (`agent_*` display-name variables and `agent_slug_*` raw-slug variables), then iterates all suites × targets, orchestrates the full pipeline (discover → load → render → validate → write), and returns an aggregated summary. Respects `check` (no writes) and `strict` (fail on warnings/errors) flags.
 
-### `buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap?, registry?)`
+### `buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap?, registry?, personaIndex?)`
 
 ```ts
 export async function buildSuite(
@@ -37,14 +37,19 @@ export async function buildSuite(
   target: string,
   agentMap?: Record<string, string>,
   registry?: TargetRegistry,
+  personaIndex?: PersonaIndex,
 ): Promise<BuildResult[]>;
 ```
 
-Builds all personas in a single suite for a single target. Loads `_shared.yaml`, merges partials, fires `onSuiteInit` and `onPartials` hooks, discovers persona YAMLs, and delegates to `buildPersona()`. The optional `agentMap` is forwarded to each persona build.
+Builds all personas in a single suite for a single target. Loads `_shared.yaml`, merges partials, fires `onSuiteInit` and `onPartials` hooks, discovers persona YAMLs, and delegates to `buildPersona()` **only for personas whose resolved `targets` (see **Persona Index and Target Resolution** below) include `target`** — an excluded persona is skipped entirely: no context is built, no plugin hooks run, and nothing is written. The optional `agentMap` is forwarded to each persona build.
+
+**Filtering source:** The optional trailing `personaIndex` supplies each persona's resolved `targets` by YAML path without re-scanning — `build()` always passes the pre-scanned index it already built. When omitted (a direct `buildSuite()` call), `buildSuite()` self-scans its own suite alone (a single-suite `scanPersonas()` call) to resolve the same information, so a direct call still filters correctly at the cost of one extra suite-local scan. This filtering is a `buildSuite()`/`build()`-only concern — `buildPersona()` never applies `targets`, since calling it directly is an explicit request to build exactly that one persona × target combination.
+
+**Also forwarded to validation:** The same `personaIndex` (given or self-scanned) is passed straight through to every `buildPersona()` call, so it doubles as the index that enables `validateSubagentRefs()`'s target-aware check (see `buildPersona()` below) — a `buildSuite()`/`build()` caller gets both target filtering and target-aware sub-agent validation from one index.
 
 **Two-registry limitation:** `registry` defaults to `defaultRegistry`. If you pass a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and call `buildSuite()` directly without the same registry argument, your custom targets will not be visible. Either pass the registry instance explicitly here, or use `build()` to have it forwarded automatically.
 
-### `buildPersona(personaYamlPath, suiteName, suiteConfig, sharedMeta, partialsMap, config, plugins, target, agentMap?, registry?)`
+### `buildPersona(personaYamlPath, suiteName, suiteConfig, sharedMeta, partialsMap, config, plugins, target, agentMap?, registry?, personaIndex?)`
 
 ```ts
 export async function buildPersona(
@@ -58,10 +63,11 @@ export async function buildPersona(
   target: string,
   agentMap?: Record<string, string>,
   registry?: TargetRegistry,
+  personaIndex?: PersonaIndex,
 ): Promise<BuildResult>;
 ```
 
-Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context (`onBuildContext`) → per-persona partials (`onPersonaPartials`) → frontmatter → body rendering → post-processing (`onPostRender`) → validation (`onValidate` + `validateSubagentRefs()`) → write. The optional `agentMap` (a `Record<string, string>` of `agent_slug_*` keys to raw slug values) is passed to `validateSubagentRefs()` to verify that every slug in `persona.subagents` has a corresponding entry in the map. Passing `{}` (the default) skips validation — no errors are emitted for unknown slugs.
+Builds a single persona for a single target. Runs the full rendering pipeline: load metadata → build context (`onBuildContext`) → per-persona partials (`onPersonaPartials`) → frontmatter → body rendering → post-processing (`onPostRender`) → validation (`onValidate` + `validateSubagentRefs()`) → write. The optional `agentMap` (a `Record<string, string>` of `agent_slug_*` keys to raw slug values) is passed to `validateSubagentRefs()`, unchanged in role, to verify that every slug in `persona.subagents` has a corresponding entry in the map. Passing `{}` (the default) skips this unknown-slug check — no errors are emitted for unknown slugs. The optional trailing `personaIndex` (a cross-suite `PersonaIndex`, see `resolvePersonaTargets()` / `scanPersonas()` below) additionally enables `validateSubagentRefs()`'s target-aware check: a declared slug that exists in the index but whose resolved `targets` exclude the target currently being built produces a second, independent error. Omitting `personaIndex` skips only the target-aware check; the unknown-slug check is governed solely by `agentMap`.
 
 **Two-registry limitation:** `registry` defaults to `defaultRegistry`. If you pass a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and call `buildPersona()` directly without the same registry argument, your custom targets will not be visible. Either pass the registry instance explicitly here, or use `build()` to have it forwarded automatically.
 
@@ -69,7 +75,7 @@ Builds a single persona for a single target. Runs the full rendering pipeline: l
 
 ## Cross-Suite Template Context Variables
 
-Populated by `buildAgentNameMap()` during the pre-scan phase of `build()`. For every persona across all configured suites, two context keys are injected:
+Populated by `agentNameMapFromIndex()` (derived from the `scanPersonas()` pre-scan — see **Persona Index and Target Resolution** below) during the pre-scan phase of `build()`. For every persona across all configured suites, two context keys are injected:
 
 | Key pattern | Value | Typical use |
 |-------------|-------|-------------|
@@ -85,6 +91,118 @@ Populated by `buildAgentNameMap()` during the pre-scan phase of `build()`. For e
 Both keys are injected at context merge step 4 (after derived fields, before plugin hooks) and are only set when not already present — explicit YAML overrides always win. See **Context Merge Order** in `data-flows.md`.
 
 ---
+
+## Persona Index and Target Resolution
+
+Owned by `src/builders/persona-index.ts` (file discovery helpers live alongside it in
+`src/builders/persona-files.ts`). Replaces the former name-map-only pre-scan with a single pass
+over every persona YAML that carries resolved targets and tool-parity exceptions alongside the
+data the cross-suite agent name map is derived from — one scan, so the two cannot disagree.
+
+### `resolvePersonaTargets(declared, registry, yamlPath)`
+
+```ts
+export function resolvePersonaTargets(
+  declared: unknown,
+  registry: TargetRegistry,
+  yamlPath: string,
+): TargetResolution;
+```
+
+Resolves a persona's declared `targets` field against a `TargetRegistry`:
+
+- `undefined` → every registered target, no issues.
+- Not an array → `[]`, one `error`-severity issue.
+- An empty array → `[]`, one `error`-severity issue (an empty list most likely signals an author mistake, rather than "build for nothing").
+- A non-string entry → dropped, one `error`-severity issue per entry.
+- An entry naming an unregistered target → dropped, one `error`-severity issue per entry.
+- A duplicate of an already-accepted entry → silently dropped, no issue.
+
+Issue messages name the persona YAML path so a build failure points directly at the offending file.
+
+### `scanPersonas(config, registry)`
+
+```ts
+export async function scanPersonas(
+  config: BuildConfig,
+  registry: TargetRegistry,
+): Promise<PersonaIndex>;
+```
+
+Scans every configured suite's persona YAML files once (via `discoverSuitePersonaYamls()` /
+`loadPersonaYaml()` from `persona-files.ts`), resolving each persona's `targets` (via
+`resolvePersonaTargets()`) and `tool_parity_exceptions` along the way. Iterates suites in
+`Object.entries(config.suites)` order and, within each suite, personas in
+`discoverSuitePersonaYamls()`'s sorted order — the same traversal order the former
+`buildAgentNameMap()` used, so `agentNameMapFromIndex()` reproduces its output byte-for-byte.
+
+### `agentNameMapFromIndex(index)`
+
+```ts
+export function agentNameMapFromIndex(index: PersonaIndex): Record<string, string>;
+```
+
+Derives the cross-suite agent name map (see **Cross-Suite Template Context Variables** above)
+from a `PersonaIndex`. For each entry, in scan order: `agent_<underscored_slug>` → `"<name>
+v<version>"`, `agent_slug_<underscored_slug>` → `<slug>` (raw, hyphens preserved). Replaces the
+former, now-removed `buildAgentNameMap()`.
+
+### `PersonaIndexEntry`
+
+```ts
+export interface PersonaIndexEntry {
+  suite: string;
+  yamlPath: string;
+  slug: string;
+  name: string;
+  version: string;
+  targets: string[];
+  declaredTargets?: unknown;
+  toolParityExceptions: string[];
+}
+```
+
+One persona's entry in the cross-suite index. `declaredTargets` stores the raw YAML `targets`
+value verbatim (`undefined` when the field is absent) so a consumer can distinguish "declared
+nothing" from "declared something invalid" without re-parsing the YAML.
+
+### `PersonaIndex`
+
+```ts
+export interface PersonaIndex {
+  entries: PersonaIndexEntry[];
+  bySlug: Map<string, PersonaIndexEntry>;
+  issues: ValidationResult[];
+}
+```
+
+The result of scanning every configured suite's persona YAML files once. `bySlug` resolves
+cross-suite slug collisions the same way the historical agent map did — the later entry in
+suite-then-filename scan order wins. `issues` collects error-severity results from resolving each
+persona's `targets` field, plus a warning-severity result for each `tool_parity_exceptions` entry
+that names a capability unrecognised by every registered target's `toolCapabilities` map (and
+isn't an `mcp:`-prefixed form) — see `validateToolParity(personaLabel, perTarget, exceptions)`
+above. `build()` copies this list verbatim into `BuildSummary.issues`, and also folds it into
+`BuildSummary.strictFailures` unconditionally — an index issue (e.g. an unknown `targets` name) now
+fails the build the same way an error-severity `BuildResult.validationResults` entry does, with or
+without `strict: true` (see **Build success semantics** under `BuildSummary` below). Parity findings
+themselves are a separate mechanism: they land directly on the affected `BuildResult.validationResults`
+and participate in `strict` mode through that path instead — see `validateToolParity` above.
+
+### `TargetResolution`
+
+```ts
+export interface TargetResolution {
+  targets: string[];
+  issues: ValidationResult[];
+}
+```
+
+The outcome of resolving a persona's declared `targets` field against a target registry: the
+resolved, deduplicated target list plus any validation issues encountered.
+
+---
+
 ## Derived Context Fields
 
 Fields computed by `buildContext()` at build time (merge step 3). Most are only set when not already present — YAML overrides always win. **Exception: `version` is unconditionally overwritten** — see note below.
@@ -134,6 +252,24 @@ export function resolvePartials(
 ```
 
 Replaces `{{> name}}` markers with content from `partialsMap`. Recursion capped at depth 2. Missing partials emit `console.warn` and are preserved as-is.
+
+### `collectPartialReferences(text, partialsMap)`
+
+```ts
+export function collectPartialReferences(
+  text: string,
+  partialsMap: Record<string, string>,
+): Set<string>;
+```
+
+Collects the names of every partial a template transitively references, without resolving or
+rendering anything. Mirrors `resolvePartials()` exactly — same `{{> name}}` regex, same depth-2
+recursion cap — so a caller (e.g. a validator's `partial` trigger) can ask "would the renderer
+expand this partial?" and get the same answer the renderer itself would give, including one level
+of nested partial-within-partial references. A referenced name is recorded whether or not it
+exists in `partialsMap` — this reports what the template *asks for*, not what successfully
+resolves — but an unknown name is not recursed into further (there is nothing to recurse into).
+Zero imports, no console output (unlike `resolvePartials()`, which warns on an unresolved name).
 
 ### `resolveConditionals(text, context)`
 
@@ -329,18 +465,88 @@ export function validateStrictMarkers(
 
 Checks that every marker in `requiredMarkers` appears verbatim in `renderedContent`. Returns one error per missing marker.
 
-### `validateSubagentRefs(persona, agentMap)`
+### `validateSubagentRefs(persona, agentMap, index?, target?)`
 
 ```ts
 export function validateSubagentRefs(
   persona: PersonaMetadata,
   agentMap: Record<string, string>,
+  index?: PersonaIndex,
+  target?: string,
 ): ValidationResult[];
 ```
 
-Validates that every slug declared in `persona.subagents` has a corresponding `agent_slug_*` key in `agentMap`. Returns one `ValidationResult` (severity `'error'`) per unknown slug, with a message that includes the persona name and the unresolved slug. Early-exits and returns `[]` when `persona.subagents` is absent or empty, or when `agentMap` is empty. Called internally by `buildPersona()` and collects its results alongside `onValidate` hook results.
+Lives in `src/validators/subagent-validator.ts` and is exported from the validators layer (`src/validators/index.ts`) — it was previously an unexported helper inside `persona-builder.ts`; the relocation fixes the manifest/code drift the earlier revision of this document flagged. Runs two independent checks per declared slug, both severity `'error'`:
 
-**Key derivation:** Slugs are looked up via `agent_slug_${slug.replace(/-/g, '_')}` — matching the key naming convention established by `buildAgentNameMap()`. Unknown slugs indicate a configuration mismatch between the persona's `subagents` declaration and the actual agent map built from the configured suites.
+1. **Unknown slug** — a declared slug has no corresponding `agent_slug_*` key in `agentMap`. Early-exits this check (but not the target-aware check below) when `agentMap` has zero entries — an empty map is treated as "no cross-suite agent data was computed for this call", not "zero personas exist anywhere", so a direct call that doesn't supply an agent map gets no unknown-slug noise it never asked for.
+2. **Target-aware** — runs only when both `index` and `target` are supplied. A declared slug that resolves to an entry in `index.bySlug` whose `targets` exclude `target` is flagged as "not built for target", since a dispatching persona built for one target should not name a sub-agent that was never written for that target. A slug absent from the index is left entirely to the unknown-slug check; this also keeps a suite-only index (as built by a direct `buildSuite()` call) from raising false target-aware errors for cross-suite slugs it never scanned.
+
+Both checks are independent — the same slug can fail both if `agentMap` and `index` were built from different scans. `persona.subagents` absent or empty short-circuits to `[]` before either check runs. Called internally by `buildPersona()` and collects its results alongside `onValidate` hook results.
+
+**Key derivation:** Slugs are looked up via `agent_slug_${slug.replace(/-/g, '_')}` — matching the key naming convention established by `agentNameMapFromIndex()`. Unknown slugs indicate a configuration mismatch between the persona's `subagents` declaration and the actual agent map built from the configured suites.
+
+### `validateToolRequirements(options)`
+
+```ts
+export interface ToolRequirement {
+  id: string;
+  when: { field: string } | { partial: string };
+  targets?: string[];
+}
+
+export const SUBAGENT_DISPATCH_REQUIREMENT: ToolRequirement;
+
+export interface ValidateToolRequirementsOptions {
+  personaName: string;
+  target: string;
+  effectiveTools: string[] | undefined;
+  triggered: ToolRequirement[];
+  definition: TargetDefinition;
+  registry: TargetRegistry;
+}
+
+export function validateToolRequirements(
+  options: ValidateToolRequirementsOptions,
+): ValidationResult[];
+```
+
+Pure, side-effect-free validator (owned by `src/validators/tool-requirements-validator.ts`) driven entirely by the current target's `TargetDefinition.toolCapabilities` — no target-name branches. Runs two checks:
+
+1. **Dispatch grant.** For each `ToolRequirement` in `triggered` whose `targets` (if set) include the current `target`, an error is emitted when `effectiveTools` grants none of the target's `dispatch` capability tools. A target without a capability map, or without a `dispatch` entry, is skipped entirely — nothing to validate the grant against.
+2. **Foreign notation.** Any tool in `effectiveTools` that is not recognised by the current target's own capability map or `mcpToolPattern`, but *is* recognised by some other registered target's notation (via `recognizedBy()`, `src/targets/tools.ts`), produces a warning naming the recognising target and — when resolvable — the current target's equivalent tool names.
+
+`effectiveTools === undefined` short-circuits both checks and returns `[]` — an absent effective tool list means the platform's default grant is assumed to apply, so there is nothing meaningful to compare against.
+
+`SUBAGENT_DISPATCH_REQUIREMENT` (`{ id: 'subagent-dispatch', when: { field: 'subagents' } }`) is the built-in requirement covering the historical case: a persona that declares `subagents` must grant `dispatch` on every target it builds for. Consumers add further requirements via `BuildConfig.toolRequirements?: ToolRequirement[]` (`src/builders/types.ts`).
+
+**Wired into the build pipeline:** `buildPersona()` step 10 computes the applied-requirements list (the built-in `SUBAGENT_DISPATCH_REQUIREMENT` first, then `config.toolRequirements`, deduplicated by `id` with config entries replacing a same-`id` built-in), determines which are triggered (`when.field` checked against the post-`onBuildContext` render context; `when.partial` checked via `collectPartialReferences(bodyTemplate, personaPartialsMap)`), resolves `effectiveTools` via `resolveTargetTools()`, and calls this validator with all of it — but only when the target being built has a registered `TargetDefinition`; a target absent from the registry skips the check entirely (see `BuildResult.effectiveTools` below). Declaring `BuildConfig.toolRequirements` now directly affects `BuildResult.validationResults`.
+
+### `validateToolParity(personaLabel, perTarget, exceptions)`
+
+```ts
+export interface TargetCapabilitySet {
+  target: string;
+  capabilities: Map<string, string>;
+  toolCapabilities: Record<string, string[]>;
+}
+
+export interface ToolParityFinding {
+  target: string;
+  result: ValidationResult;
+}
+
+export function validateToolParity(
+  personaLabel: string,
+  perTarget: TargetCapabilitySet[],
+  exceptions: string[],
+): ToolParityFinding[];
+```
+
+Pure, side-effect-free validator (owned by `src/validators/tool-parity-validator.ts`, exported from `src/validators/index.ts`) comparing a persona's granted capabilities across every target it was built for. `perTarget.length < 2` short-circuits to `[]` — a single mapped target has nothing to compare against. For each capability granted on at least one `perTarget` entry but missing on another, and not present in `exceptions`, emits one **error**-severity `ToolParityFinding` per lacking target, naming every granting target and its granting tool plus the lacking target's own equivalent tool names (from its `toolCapabilities` map — named even when none of those tools are currently granted). Capabilities never granted anywhere among the participating targets, or granted on all of them, produce no finding.
+
+**Wired into the build pipeline as a post-pass:** `build()` cannot run this inside `buildPersona()` — a single-target build never sees another target's effective tool list. After all suites × targets have built, `build()` groups `BuildResult`s by `personaYamlPath`, filters to results whose target has a registered `TargetDefinition` (a capability map to resolve against) and a defined `effectiveTools`, computes each surviving result's granted capabilities via `resolveCapabilities()`, and calls `validateToolParity()` with the persona's resolved `tool_parity_exceptions` (from the pre-scan `PersonaIndex`). Each returned finding is appended to its `target`'s own `BuildResult.validationResults` — before `strictFailures` is computed, so parity errors participate in `strict: true`. A persona excluded from a target via its resolved `targets` field was never built for that target, so it has no `BuildResult` there and is not compared against it; a `deep-agents` result (no capability map) never participates on either side of a comparison.
+
+**Unknown exception names:** `scanPersonas()` flags any `tool_parity_exceptions` entry that is neither a capability name recognised by some registered target's `toolCapabilities` map nor an `mcp:`-prefixed form as a warning-severity issue in `PersonaIndex.issues` (see `PersonaMetadata` below) — a typo'd exception name silently stops exempting anything, so it is surfaced rather than swallowed.
 
 ---
 
@@ -539,12 +745,12 @@ export class TargetRegistry {
 
 Holds `TargetDefinition` entries keyed by name. Preserves insertion order — `names()` and `allDefinitions()` are deterministic.
 
-- **`register(definition)`** — Registers a target. Throws if a target with the same `name` is already registered.
-- **`get(name)`** — Returns a shallow copy of the `TargetDefinition` for `name`. Throws (listing known names) if not registered. Mutating the returned object does not affect the registry.
+- **`register(definition)`** — Registers a target. Throws if a target with the same `name` is already registered. Also throws if `definition.mcpToolPattern` is a `RegExp` carrying the `g` or `y` flag — a global/sticky pattern has mutable `lastIndex` state that would make `exec()`/`test()` results depend on call order once the same `RegExp` instance is shared across registry copies (see `clone()`).
+- **`get(name)`** — Returns a copy of the `TargetDefinition` for `name`, **deep-copying `toolCapabilities`** (each capability's tool-name array is a fresh array). Throws (listing known names) if not registered. Mutating the returned object, including pushing into a `toolCapabilities` array, does not affect the registry.
 - **`has(name)`** — Returns `true` if a target with the given name is registered.
 - **`names()`** — Returns all registered target names in registration order.
-- **`allDefinitions()`** — Returns shallow copies of all `TargetDefinition` objects in registration order. Mutating a returned definition does not affect the registry.
-- **`clone()`** — Returns a new `TargetRegistry` pre-populated with shallow copies of the same definitions. Useful for test isolation.
+- **`allDefinitions()`** — Returns copies of all `TargetDefinition` objects in registration order, with the same deep-copy of `toolCapabilities` as `get()`. Mutating a returned definition does not affect the registry.
+- **`clone()`** — Returns a new `TargetRegistry` pre-populated with copies of the same definitions (same deep-copy guarantee for `toolCapabilities`). Useful for test isolation.
 
 ---
 
@@ -661,6 +867,15 @@ export interface BuildConfig {
    */
   partials?: Record<string, string>;
   targetRegistry?: TargetRegistry;
+  /**
+   * Additional `ToolRequirement`s (beyond the built-in `SUBAGENT_DISPATCH_REQUIREMENT`)
+   * that personas can trigger to declare their own dispatch requirements — e.g. a
+   * handoff partial that implies the persona must dispatch sub-agents. See
+   * `validateToolRequirements()` above. Wired into `buildPersona()` step 10: entries
+   * here are merged with the built-in requirement (a same-`id` entry replaces it) and
+   * checked on every build.
+   */
+  toolRequirements?: ToolRequirement[];
 }
 ```
 
@@ -699,8 +914,11 @@ export interface BuildResult {
   content: string;
   validationResults: ValidationResult[];
   written: boolean;
+  effectiveTools?: string[];
 }
 ```
+
+**`effectiveTools`:** The persona's effective (post-`onBuildContext`) tool list for `target`, resolved via `resolveTargetTools()` — the same list `validateToolRequirements()` validated against in step 10. `undefined` when `target` has no registered `TargetDefinition` (no capability map to resolve against, so the tool-requirements check is skipped entirely for that result too). Consumed by `build()`'s capability-parity post-pass (`validateToolParity()`, see **`validateToolParity(personaLabel, perTarget, exceptions)`** above), which compares tool grants across a persona's built targets — a result with `effectiveTools === undefined` is excluded from that comparison on either side.
 
 ### `BuildSummary`
 
@@ -711,8 +929,28 @@ export interface BuildSummary {
   strictFailures: ValidationResult[];
   totalBuilt: number;
   totalWritten: number;
+  skipped: SkippedBuild[];
+  issues: ValidationResult[];
+  errors: number;
+  warnings: number;
 }
 ```
+
+`skipped` holds one entry per persona × active-target combination whose resolved `targets` excluded that target — `buildPersona()` is never called for these (see `buildSuite()`'s per-persona target filtering above). `issues` is the same `ValidationResult[]` recorded on the pre-scan `PersonaIndex` (unknown target name, non-string entry, or empty array in a persona's `targets` field).
+
+`strictFailures` collects every `ValidationResult` with severity `'error'` or `'warning'` found anywhere in the build — each result's `validationResults` plus `issues` — and is now populated unconditionally, not only in `strict` mode. `errors`/`warnings` are the error-severity and warning-severity counts within `strictFailures`. **Build success semantics:** `success = errors === 0 && (!config.strict || warnings === 0)` — an error-severity result fails every build by default, with or without `strict: true`; `strict` additionally requires zero warnings. The `strict: true` throw behaviour (throwing after all suites have built, with output files still written to disk) is unchanged and only fires in `strict` mode.
+
+### `SkippedBuild`
+
+```ts
+export interface SkippedBuild {
+  suite: string;
+  target: string;
+  personaYamlPath: string;
+}
+```
+
+One persona × target combination that `buildSuite()` skipped because the persona's resolved `targets` excluded that target.
 
 ### `PersonaMetadata`
 
@@ -724,9 +962,13 @@ export interface PersonaMetadata {
   version?: string;
   tools?: string[];
   subagents?: string[];
+  targets?: string[];
+  tool_parity_exceptions?: string[];
   [key: string]: unknown;
 }
 ```
+
+`targets` and `tool_parity_exceptions` are resolved by `resolvePersonaTargets()` / `scanPersonas()` — see **Persona Index and Target Resolution** below. `targets` is used by `buildSuite()`/`build()` to filter build output (an excluded persona is skipped and recorded in `BuildSummary.skipped`); `tool_parity_exceptions` is recorded per-persona in the `PersonaIndex` and consumed by `build()`'s capability-parity post-pass (see **`validateToolParity(personaLabel, perTarget, exceptions)`** above) — a capability named here is exempt from that persona's parity check on every target.
 
 ### `PersonaBuildPlugin`
 
@@ -790,12 +1032,91 @@ export interface TargetDefinition {
   defaultFrontmatter: string;
   contextFlags?: Record<string, unknown>;
   defaultEnabled?: boolean;
+  toolsContextKey?: string;
+  toolCapabilities?: Record<string, string[]>;
+  mcpToolPattern?: RegExp;
 }
 ```
 
 Describes a build target. `name` is the unique target identifier (e.g. `'vscode'`). `outputDirKey` maps to the suite's output directory key. `filenameContextKey` names the build-context field holding a custom output filename for this target. `defaultFrontmatter` is the template used when no plugin or `BuildConfig` override is provided. `contextFlags` is a **declarative** map of context injections (e.g. `{ target_vscode: true }`) — consumed by the runtime via registry-driven lookup (`registry.get(target).contextFlags`). Each key-value pair is injected into the build context for the corresponding target, enabling conditional template rendering. When a target is not present in the registry, the engine falls back to injecting a single boolean via string replacement (`target_${name.replace(/-/g, '_')} = true`). `defaultEnabled` controls whether the target is included in the default build when no explicit `targets` array is configured — defaults to `true` when omitted; set to `false` for opt-in targets (e.g. `'deep-agents'`).
 
+`toolsContextKey`, `toolCapabilities`, and `mcpToolPattern` (added for tool-capability resolution, see **Target Tool Capability Resolution** below) are all optional — a custom target registered without them still registers and builds; it simply grants no resolvable capabilities and is invisible to `recognizedBy()`/`resolveCapabilities()`.
+
 > **Custom targets for non-persona content:** `TargetDefinition` is not limited to personas — any document type with its own frontmatter schema (e.g. skills) can be built by registering a custom target with the appropriate `defaultFrontmatter` template. See the [Building Skills](../../building-skills.md) guide for an end-to-end example.
+
+---
+
+## Target Tool Capability Resolution
+
+Owned by `src/targets/tools.ts`. A shared resolver so rendering (`buildContext()`'s `cc_tools`/
+`da_tools` fallback) and validation (dispatch-grant, capability-parity, and foreign-notation
+checks — later steps) read the same capability → tool vocabulary instead of each maintaining its
+own target-name branches or hand-copied tool list.
+
+**Built-in capability coverage:** Only seven basic capabilities are mapped —
+`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo` — plus `mcp:<server>` via
+`mcpToolPattern`. Tool names with no counterpart on another target (e.g. VS Code's `vscode`,
+`browser`) are absent from every capability list and ignored by every check; this correspondence
+is intentionally rough (deliberate scope decision, 2026-09-29).
+
+| Target | `toolsContextKey` | `toolCapabilities` | `mcpToolPattern` |
+|--------|-------------------|---------------------|-------------------|
+| `vscode` | `tools` | `execute→execute`, `read→read`, `edit→edit`, `search→search`, `web→web`, `dispatch→agent`, `todo→todo` | `/^([\w-]+)\/.+$/` (`server/tool` notation) |
+| `claude-code` | `cc_tools` | `execute→Bash`, `read→Read`, `edit→Edit,Write`, `search→Grep,Glob`, `web→WebFetch,WebSearch`, `dispatch→Task,Agent`, `todo→TodoWrite,TodoRead` | `/^mcp__([\w-]+?)(?:__.+)?$/` (`mcp__server[__tool]` notation) |
+| `deep-agents` | `da_tools` | *(none)* | *(none)* |
+
+### `pickToolList(record, key)`
+
+```ts
+export function pickToolList(record: Record<string, unknown>, key: string): string[] | undefined;
+```
+
+Picks a tool list out of a record by `key`, falling back to `record['tools']` when `record[key]`
+is not an array. Returns `undefined` when neither is an array.
+
+### `resolveTargetTools(context, definition)`
+
+```ts
+export function resolveTargetTools(
+  context: Record<string, unknown>,
+  definition: TargetDefinition,
+): string[] | undefined;
+```
+
+Resolves the effective tool list for a target: reads `definition.toolsContextKey` (defaulting to
+`'tools'` when the definition omits the field), applying `pickToolList()`'s own `tools` fallback.
+
+### `resolveCapabilities(tools, definition)`
+
+```ts
+export function resolveCapabilities(
+  tools: string[] | undefined,
+  definition: TargetDefinition,
+): Map<string, string>;
+```
+
+Resolves which capabilities a tool list grants on a target, per `definition.toolCapabilities` and
+`definition.mcpToolPattern`. For each mapped capability, records the first tool — in the
+persona's declared tool-list order — that grants it, so a validator message can name a concrete
+tool the persona actually declared (not just the capability map's canonical name). Every
+`mcpToolPattern` match yields a `mcp:<server>` capability entry (first match wins per server).
+Returns an empty `Map` when `tools` is absent/empty or the target has neither a capability map nor
+an MCP pattern.
+
+### `recognizedBy(tool, registry, excludeTarget)`
+
+```ts
+export function recognizedBy(
+  tool: string,
+  registry: TargetRegistry,
+  excludeTarget: string,
+): string[];
+```
+
+Finds which other registered targets (excluding `excludeTarget`) recognise `tool` — either via a
+`toolCapabilities` entry or an `mcpToolPattern` match. Used for the foreign-notation check: a tool
+spelled in another target's notation (e.g. `read` appearing in a claude-code tool list) is
+recognised by `vscode` but not by `claude-code`. Returns target names in registry order.
 
 ### `ValidationResult`
 

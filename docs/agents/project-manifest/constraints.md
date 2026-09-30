@@ -34,6 +34,29 @@ The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All six hook f
 
 When `strict: true` is used **without** `check: true`, `build()` writes all output files to disk before evaluating validation failures — leaving partial artefacts on failure. CI pipelines calling `build()` in validation mode **must** combine `strict: true` with `check: true` to avoid partial writes.
 
+### 3b. `TargetDefinition.mcpToolPattern` MUST NOT carry the `g` or `y` flag
+
+`TargetRegistry.register()` throws if a registered `mcpToolPattern` is a global (`g`) or sticky
+(`y`) `RegExp`. Both flags give `exec()`/`test()` mutable `lastIndex` state, and the same `RegExp`
+instance is shared between registry copies (`clone()`, `allDefinitions()`, `get()`) — a
+global/sticky pattern would make match results depend on call order across those copies. Any new
+built-in or custom target's `mcpToolPattern` must be a plain (non-`g`, non-`y`) pattern.
+
+### 3c. Build Success: Error-Severity Results Always Fail — MUST preserve
+
+Since WP-010 (Build Success Semantics), `build()` computes
+`success = errors === 0 && (!strict || warnings === 0)`. An error-severity `ValidationResult` —
+from a plugin's `onValidate`, a built-in validator (`validateSubagentRefs()`,
+`validateToolRequirements()`, `validateToolParity()`), or an index-level issue in
+`PersonaIndex.issues` — fails **every** build and exits the CLI with code `1`, whether or not
+`config.strict` is set. `strict: true` only adds a warnings-fail-too requirement and its throw
+behaviour; it is no longer the sole gate on error-severity results. `BuildSummary.strictFailures`
+reflects this: it is populated unconditionally (every result's `validationResults` plus `issues`),
+not only when `strict` is set. Any future validator or index-level issue **must** use `'error'`
+severity if its finding should fail a non-strict build — `'warning'` severity is silently
+non-fatal outside `strict` mode. See `docs/cli.md` and `docs/agents/project-manifest/api-surface.md`
+(`BuildSummary`) for the consumer-facing semantics.
+
 ---
 
 ## Naming Conventions
@@ -94,15 +117,46 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 ### 4. `subagents` Slugs Must Reference Existing Cross-Suite Personas
 
-`PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `buildAgentNameMap()` during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
+`PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `agentNameMapFromIndex()` (derived from `scanPersonas()`'s `PersonaIndex`, `src/builders/persona-index.ts`) during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` (`src/validators/subagent-validator.ts`, exported from `src/validators/index.ts`) emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
 
 **Key derivation rule:** Slug `my-agent` maps to key `agent_slug_my_agent` (hyphens → underscores). The agent map is populated from the `slug` field of every persona YAML in all configured suites — a slug only resolves if the corresponding persona exists *and* is discoverable in the build configuration.
 
-**Strict mode:** When `strict: true` is set in `BuildConfig`, unknown slugs cause `buildSuite()` to throw after collecting all validation results. When not in strict mode, the errors are reported in `BuildResult.validationResults` but do not halt the build. See also invariant 3 on combining `strict` with `check`.
+**Target-aware check:** When `buildPersona()` is called with a `personaIndex` (the case whenever `buildSuite()`/`build()` orchestrate the call, since both forward their index), `validateSubagentRefs()` also flags a slug that *does* resolve to a real persona but whose resolved `targets` (see invariant on target resolution below) exclude the target currently being built — e.g. a `claude-code` persona declaring a sub-agent that is only built for `vscode`. This is a second, independent `error`-severity `ValidationResult`, additive to the unknown-slug check: a slug can fail both if `agentMap` and `personaIndex` were built from different scans. Omitting `personaIndex` (a direct `buildPersona()` call without one) skips only this check.
 
-**Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]`.
+**Build failure without `strict`:** Both checks emit `error`-severity `ValidationResult`s, and since WP-010 (Build Success Semantics) any error-severity result fails the build by default — `build()` returns `BuildSummary.success = false` (CLI exit 1) whether or not `strict` is set. `strict: true` changes *how* that failure surfaces: instead of a returned failed summary, `build()` throws after collecting all validation results across every suite (see also invariant 3 on combining `strict` with `check` to avoid partial writes on that throw path).
+
+**Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]` before either check runs.
 
 > **User-facing reference:** See [Metadata Reference — Sub-Agent Declarations](../../metadata-reference.md#tier-4c--sub-agent-declarations) for YAML examples, slug resolution walkthrough, and template access patterns.
+
+---
+
+### 4b. Tool Validation Is Driven Entirely by `TargetDefinition.toolCapabilities`
+
+The dispatch-grant (`validateToolRequirements()`), capability-parity (`validateToolParity()`), and
+foreign-notation checks all read the same `TargetDefinition.toolCapabilities` /
+`mcpToolPattern` vocabulary (`src/targets/tools.ts`) — there is **no separate hand-maintained list**
+of dispatch tools or foreign-notation patterns anywhere in the codebase. Any change to what counts
+as a "dispatch tool" or a "foreign spelling" for a target **must** go through
+`TargetDefinition.toolCapabilities` / `mcpToolPattern`, not a new branch in a validator.
+
+- **Rough correspondence is deliberate.** Only seven capabilities are mapped
+  (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`) plus `mcp:<server>` via
+  `mcpToolPattern`. A tool name with no counterpart on another target (VS Code's `vscode`,
+  `browser`; any custom or extension tool) is invisible to every check — this is a scope decision
+  (2026-09-29), not an oversight. Do not add exhaustive mapping without a fresh decision.
+- **Parity requires ≥ 2 mapped, built targets.** `validateToolParity()` short-circuits to no
+  findings when fewer than two of a persona's built targets have both a registered
+  `TargetDefinition` capability map and a defined `BuildResult.effectiveTools`. `deep-agents`
+  (no capability map) never participates on either side of a parity comparison.
+  `tool_parity_exceptions` on the persona YAML exempts named capabilities from this check only —
+  it has no effect on the dispatch-grant or foreign-notation checks.
+- **Dispatch-grant runs per-persona, per-target**, inside `buildPersona()` step 10 — it needs only
+  that target's `effectiveTools`, not a cross-target view. **Parity runs as a `build()` post-pass**
+  — it needs every built target's `effectiveTools` for the same persona, which a single-target
+  `buildPersona()`/`buildSuite()` call cannot see (see Known Limitation below).
+- **`SUBAGENT_DISPATCH_REQUIREMENT` is always applied.** A consumer `BuildConfig.toolRequirements`
+  entry with the same `id` (`'subagent-dispatch'`) replaces it; any other `id` is additive.
 
 ---
 
@@ -191,6 +245,56 @@ error at runtime.
 `resolvePartials()` uses a hardcoded recursion depth cap of `2`. This supports a "partial → nested partial → innermost partial" chain (two levels of nesting), but a third level is **not expanded** — the `{{> name}}` marker is left as-is in the output. This cap is **not configurable** via `BuildConfig` or any other option.
 
 **Decision (2026-04-14):** Making the cap configurable was evaluated and rejected. Depth 2 covers all practical persona template patterns. Adding a `maxPartialDepth` option would increase API surface and complexity with no demonstrated demand. If a third nesting level is required in the future, raise the `depth >= 2` guard in `src/engine/partials.ts` and update the tests in `tests/engine/partials.test.ts`.
+
+### 9. An Absent Effective Tool List Is Not Flagged
+
+`validateToolRequirements()` short-circuits to `[]` when `BuildResult.effectiveTools` is
+`undefined` (the target has no registered `TargetDefinition`, so there is no capability map to
+resolve against). This is deliberate: an absent tool list means the platform's own default grant
+applies, so there is nothing meaningful to compare — but it also means a custom target registered
+without `toolsContextKey`/`toolCapabilities` gets no dispatch-grant, parity, or foreign-notation
+checking at all, silently.
+
+### 10. Unmapped Tools Are Ignored By Every Check
+
+Only the seven capabilities in `TargetDefinition.toolCapabilities` (plus `mcp:<server>` via
+`mcpToolPattern`) are resolvable. A tool name outside that vocabulary — VS Code's `vscode` or
+`browser`, any custom or extension-contributed tool — never triggers a dispatch-grant error, a
+parity finding, or a foreign-notation warning, even if it is the *only* capability difference
+between two targets. This is the same rough-correspondence scope decision as invariant 4b above,
+restated here because it is a limitation from the validation user's perspective.
+
+### 11. Derived `cc_tools_*` Fields Are Computed Before `onBuildContext`
+
+`cc_tools_list`, `cc_tools_json`, and `cc_tools_block` (and their `tools_*`/`da_tools_*` siblings)
+are computed at context merge step 3, *before* plugin `onBuildContext` hooks run at step 5 (`ctx →
+onBuildContext`). A plugin that adds or changes `cc_tools` in `onBuildContext` does not see its
+change reflected in these derived fields — they were already serialized from the pre-plugin value.
+This is a pre-existing render-ordering quirk, not new to this plan; it affects template rendering
+of these specific derived fields, not the tool-validation checks (which resolve `effectiveTools`
+freshly, post-`onBuildContext`, via `resolveTargetTools()`).
+
+### 12. `buildPersona()` Ignores `targets`
+
+`buildPersona()` builds exactly the single persona × target combination it is given — calling it
+directly is an explicit request to build that combination, so it never consults the persona's
+resolved `targets` field. Only `buildSuite()`/`build()` apply per-persona target filtering. A
+direct `buildPersona()` call for an excluded target still renders and returns a `BuildResult`.
+
+### 13. `buildSuite()` and `buildPersona()` Do Not Run the Capability-Parity Check
+
+`validateToolParity()` only runs as a `build()` post-pass (see invariant 4b above), because it
+needs every target's `effectiveTools` for the same persona — information a single-suite or
+single-persona call cannot see. Calling `buildSuite()` or `buildPersona()` directly, without going
+through `build()`, never produces parity findings, regardless of `tool_parity_exceptions`.
+
+### 14. The Library Never Deletes Output For Excluded Targets
+
+When a persona's resolved `targets` excludes a target it previously built for (e.g. after editing
+`targets:` in YAML), the library skips rendering and writing for that target on the next build —
+it does **not** delete any file already written there from a prior build. Consumers that rely on
+`targets` to retire stale output for a persona must delete the file themselves (e.g. as part of an
+output-directory pre-clean step, the pattern this plan's AI Insights consumer already uses).
 
 ---
 
