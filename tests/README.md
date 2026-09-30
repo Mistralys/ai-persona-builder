@@ -25,7 +25,8 @@ tests/
 │   ├── config-suite-variables.test.ts             – SuiteConfig.variables override wiring
 │   ├── da-computed-fields.test.ts                 – Deep Agents computed field derivation
 │   ├── on-persona-partials.test.ts                – onPersonaPartials hook isolation and chaining
-│   └── target-variable-injection.test.ts          – Target-flag variable injection (target_vscode, etc.)
+│   ├── target-variable-injection.test.ts          – Target-flag variable injection (target_vscode, etc.)
+│   └── tool-requirements.test.ts                  – validateToolRequirements() wiring into buildPersona() step 10 (dispatch-grant, config-rule triggers, built-in-id replacement, effectiveTools)
 │
 ├── loaders/          # Unit tests for file-system loaders
 │   ├── content-loader.test.ts   – Markdown content template discovery
@@ -39,8 +40,10 @@ tests/
 │   └── target-registry.test.ts  – TargetRegistry registration, lookup, and defaultRegistry built-ins
 │
 ├── validators/       # Unit tests for built-in validators
-│   ├── filename-validator.test.ts  – vs_file_name / cc_file_name checks
-│   └── strict-validator.test.ts    – Unresolved {{marker}} detection
+│   ├── filename-validator.test.ts          – vs_file_name / cc_file_name checks
+│   ├── strict-validator.test.ts            – Unresolved {{marker}} detection
+│   ├── subagent-validator.test.ts          – validateSubagentRefs() unknown-slug + target-aware "not built for target" cases
+│   └── tool-requirements-validator.test.ts – validateToolRequirements() dispatch-grant/foreign-notation cases
 │
 └── integration/      # End-to-end tests against the fixtures/ directory
     └── build.test.ts  – Full build() pipeline: output files written, content matches, plugin hooks invoked

@@ -593,7 +593,14 @@ describe('build() — AC-3', () => {
 
 describe('--check mode — AC-4', () => {
   it('completes without writing any files to disk', async () => {
-    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir);
+    // Explicit personaYaml with no tools/cc_tools field at all: the default
+    // fixture persona's `tools: [read]` (with no cc_tools) is vscode-only
+    // notation, which would trip the WP-009 capability-parity check across
+    // two targets — irrelevant noise for this --check-mode test, so it's
+    // avoided here rather than asserted around.
+    const { suiteDir, outDir } = await createMinimalSuite(testTmpDir, {
+      personaYaml: 'name: Test Agent\nvs_file_name: agent.agent.md\ncc_file_name: agent.md\ndescription: ""\n',
+    });
 
     const suiteConfig: SuiteConfig = {
       srcDir: suiteDir,

@@ -35,12 +35,11 @@
  * lowest-priority layers in the merge chain.
  */
 
-import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
 
-import { resolvePartials } from '../engine/partials.js';
+import { resolvePartials, collectPartialReferences } from '../engine/partials.js';
 import { resolveConditionals } from '../engine/conditionals.js';
 import { resolveVariables } from '../engine/variables.js';
 import {
@@ -61,78 +60,27 @@ import {
 
 import { resolveFrontmatterTemplate, renderFrontmatter } from './frontmatter.js';
 import { resolveChangelogMeta } from '../utils/changelog.js';
-import type { BuildConfig, BuildResult, BuildSummary } from './types.js';
+import type { BuildConfig, BuildResult, BuildSummary, SkippedBuild } from './types.js';
 import type { PersonaBuildPlugin, PersonaMetadata, SuiteConfig, TargetType, ValidationResult } from '../plugins/types.js';
 import { defaultRegistry } from '../targets/built-in.js';
+import { pickToolList, resolveTargetTools, resolveCapabilities } from '../targets/tools.js';
 import type { TargetDefinition } from '../targets/types.js';
 import type { TargetRegistry } from '../targets/registry.js';
+import { discoverSuitePersonaYamls, loadPersonaYaml, loadRawYaml } from './persona-files.js';
+import { agentNameMapFromIndex, scanPersonas } from './persona-index.js';
+import type { PersonaIndex } from './persona-index.js';
+import { validateSubagentRefs } from '../validators/subagent-validator.js';
+import {
+  validateToolRequirements,
+  SUBAGENT_DISPATCH_REQUIREMENT,
+} from '../validators/tool-requirements-validator.js';
+import type { ToolRequirement } from '../validators/tool-requirements-validator.js';
+import { validateToolParity } from '../validators/tool-parity-validator.js';
+import type { TargetCapabilitySet } from '../validators/tool-parity-validator.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Discover all persona YAML files in the `meta/` subdirectory of a suite.
- *
- * Excludes files whose names start with `_` (shared metadata files such as
- * `_shared.yaml`).  Results are sorted lexicographically.
- *
- * @param suiteConfig  Suite configuration (used to locate `metaSubdir`)
- * @returns            Absolute paths to each persona YAML file, sorted.
- */
-async function discoverSuitePersonaYamls(suiteConfig: SuiteConfig): Promise<string[]> {
-  const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
-  const metaDir = path.join(suiteConfig.srcDir, metaSubdir);
-
-  const entries = await readdir(metaDir, { withFileTypes: true });
-
-  return entries
-    .filter((e) => e.isFile() && e.name.endsWith('.yaml') && !e.name.startsWith('_'))
-    .map((e) => path.join(metaDir, e.name))
-    .sort();
-}
-
-/**
- * Load and parse a raw YAML file into a plain object.
- * Used for `_shared.yaml` which does not conform to PersonaMetadata's
- * `name` requirement.
- *
- * @param filePath  Absolute path to the YAML file
- * @returns         Parsed object, or {} when the file is empty/absent
- */
-async function loadRawYaml(filePath: string): Promise<Record<string, unknown>> {
-  if (!existsSync(filePath)) return {};
-  const raw = await readFile(filePath, 'utf8');
-  const parsed: unknown = yaml.load(raw);
-  if (parsed === null || parsed === undefined) return {};
-  if (typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  return parsed as Record<string, unknown>;
-}
-
-/**
- * Load a persona YAML file and return it as a plain metadata record.
- * The `name` field is derived from the filename stem when absent.
- *
- * @param yamlPath  Absolute path to the persona YAML file
- * @returns         Merged metadata record ready for context building
- */
-async function loadPersonaYaml(yamlPath: string): Promise<Record<string, unknown>> {
-  const raw = await readFile(yamlPath, 'utf8');
-  const parsed: unknown = yaml.load(raw);
-
-  if (parsed === null || parsed === undefined || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`buildPersona: expected a YAML object in "${yamlPath}"`);
-  }
-
-  const record = parsed as Record<string, unknown>;
-
-  // Derive name from filename stem if not present in YAML
-  if (!record['name']) {
-    record['name'] = path.basename(yamlPath, '.yaml');
-  }
-
-  return record;
-}
 
 /**
  * Resolve the output directory for a given target from a suite configuration.
@@ -175,64 +123,6 @@ function resolveOutputDir(
       `Add outputDirs['${lookupKey}'] to the suite config, or, for the built-in ` +
       `targets, provide the outVscode / outClaudeCode fields.`,
   );
-}
-
-/**
- * Pre-scan all suites and build a cross-suite agent name map.
- *
- * For each persona across all configured suites, creates a context variable:
- *   key:   `agent_` + slug (hyphens → underscores)
- *   value: `"<name> v<version>"`
- *
- * Slug is taken from the persona YAML's `slug` field, falling back to the
- * filename stem. Version falls back to the suite's `default_version`, then
- * to `'0.0.0'`.
- *
- * @param config  Top-level BuildConfig with all suite definitions
- * @returns       Map of agent variable keys to display strings
- */
-async function buildAgentNameMap(
-  config: BuildConfig,
-): Promise<Record<string, string>> {
-  const agentMap: Record<string, string> = {};
-
-  for (const [, suiteConfig] of Object.entries(config.suites)) {
-    const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
-    const sharedYamlPath = path.join(suiteConfig.srcDir, metaSubdir, '_shared.yaml');
-    const sharedMeta = await loadRawYaml(sharedYamlPath);
-    const defaultVersion =
-      typeof sharedMeta['default_version'] === 'string'
-        ? sharedMeta['default_version']
-        : '0.0.0';
-
-    const personaYamls = await discoverSuitePersonaYamls(suiteConfig);
-
-    for (const yamlPath of personaYamls) {
-      const persona = await loadPersonaYaml(yamlPath);
-
-      const slug =
-        typeof persona['slug'] === 'string'
-          ? persona['slug']
-          : path.basename(yamlPath, '.yaml');
-
-      const name =
-        typeof persona['name'] === 'string'
-          ? persona['name']
-          : slug;
-
-      const clMeta = resolveChangelogMeta(persona['changelog']);
-      const version = clMeta?.version ?? defaultVersion;
-
-      const underscoredSlug = slug.replace(/-/g, '_');
-      const key = `agent_${underscoredSlug}`;
-      agentMap[key] = `${name} v${version}`;
-
-      const slugKey = `agent_slug_${underscoredSlug}`;
-      agentMap[slugKey] = slug;
-    }
-  }
-
-  return agentMap;
 }
 
 /**
@@ -300,7 +190,7 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
 
   // ── Derived convenience fields (only set when not already provided) ───────
   // tools_list / tools_json — serialized from the `tools` array if present
-  const tools = Array.isArray(merged['tools']) ? (merged['tools'] as string[]) : [];
+  const tools = pickToolList(merged, 'tools') ?? [];
   if (!('tools_list' in merged)) {
     merged['tools_list'] = serializeToolsList(tools);
   }
@@ -309,7 +199,7 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
   }
 
   // cc_tools_list / cc_tools_json — from `cc_tools` or fall back to `tools`
-  const ccTools = Array.isArray(merged['cc_tools']) ? (merged['cc_tools'] as string[]) : tools;
+  const ccTools = pickToolList(merged, 'cc_tools') ?? [];
   if (!('cc_tools_list' in merged)) {
     merged['cc_tools_list'] = serializeToolsList(ccTools);
   }
@@ -343,7 +233,7 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
   // Intentionally gated on da_file_name: unlike cc_tools_list/cc_tools_json (always emitted for
   // every persona), da_* fields are absent when the persona has no deep-agents output file (AC-4).
   if (typeof merged['da_file_name'] === 'string') {
-    const daTools = Array.isArray(merged['da_tools']) ? (merged['da_tools'] as string[]) : tools;
+    const daTools = pickToolList(merged, 'da_tools') ?? [];
     if (!('da_tools_list' in merged)) {
       merged['da_tools_list'] = serializeToolsList(daTools);
     }
@@ -380,47 +270,82 @@ function buildContext(options: BuildContextOptions): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
+// Tool requirements — applied-list computation and trigger detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the effective list of `ToolRequirement`s for a build: the built-in
+ * `SUBAGENT_DISPATCH_REQUIREMENT` first, then `config.toolRequirements`
+ * entries. A config entry sharing an `id` with the built-in (or with an
+ * earlier config entry) replaces it — only one requirement per `id` ever
+ * applies.
+ *
+ * @param config  Top-level BuildConfig, whose optional `toolRequirements`
+ *                supplies consumer-declared requirements.
+ * @returns       The applied requirements, deduplicated by `id`.
+ */
+function computeAppliedToolRequirements(config: BuildConfig): ToolRequirement[] {
+  const byId = new Map<string, ToolRequirement>();
+  byId.set(SUBAGENT_DISPATCH_REQUIREMENT.id, SUBAGENT_DISPATCH_REQUIREMENT);
+
+  for (const requirement of config.toolRequirements ?? []) {
+    byId.set(requirement.id, requirement);
+  }
+
+  return Array.from(byId.values());
+}
+
+/**
+ * Determine whether a `ToolRequirement` is triggered for the current
+ * persona build.
+ *
+ *   - `{ field }` fires when the named key in the post-`onBuildContext`
+ *     `context` is a non-empty array or a non-empty string.
+ *   - `{ partial }` fires when the persona's raw content template
+ *     transitively references the named partial (directly, or via one level
+ *     of nesting — see `collectPartialReferences()`), using **this target's**
+ *     `personaPartialsMap` — partial content can differ per target when an
+ *     `onPersonaPartials` plugin injects target-specific overrides, so the
+ *     same trigger check can, in principle, give a different answer per
+ *     target even though `bodyTemplate` itself does not vary by target.
+ *
+ * @param requirement        The requirement to test.
+ * @param context             Post-`onBuildContext` rendering context.
+ * @param bodyTemplate        Raw (unrendered) content template for this persona.
+ * @param personaPartialsMap  This target's persona-scoped partials map.
+ * @returns                   `true` when the requirement's trigger condition holds.
+ */
+function isToolRequirementTriggered(
+  requirement: ToolRequirement,
+  context: Record<string, unknown>,
+  bodyTemplate: string,
+  personaPartialsMap: Record<string, string>,
+): boolean {
+  if ('field' in requirement.when) {
+    const value = context[requirement.when.field];
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.length > 0;
+    return false;
+  }
+
+  const referenced = collectPartialReferences(bodyTemplate, personaPartialsMap);
+  return referenced.has(requirement.when.partial);
+}
+
+// ---------------------------------------------------------------------------
 // buildPersona — single persona × single target
 // ---------------------------------------------------------------------------
 
 /**
- * Validate that all slugs declared in a persona's `subagents` field exist
- * in the cross-suite agent map.
- *
- * The agent map contains keys in the form `agent_slug_{underscored_slug}`
- * (hyphens replaced by underscores).  A declared slug is considered valid
- * when its corresponding key is present in the map.
- *
- * @param persona   Typed persona metadata (may or may not have `subagents`)
- * @param agentMap  Cross-suite agent name map built by `buildAgentNameMap()`
- * @returns         `ValidationResult[]` — one error per unknown slug, or `[]`
- */
-function validateSubagentRefs(
-  persona: PersonaMetadata,
-  agentMap: Record<string, string>,
-): ValidationResult[] {
-  const subagents = persona.subagents;
-  if (!Array.isArray(subagents) || subagents.length === 0) return [];
-
-  const results: ValidationResult[] = [];
-
-  for (const slug of subagents) {
-    const key = `agent_slug_${slug.replace(/-/g, '_')}`;
-    if (!(key in agentMap)) {
-      results.push({
-        severity: 'error',
-        message:
-          `Persona '${persona.name}' declares subagent '${slug}' but no persona ` +
-          `with that slug exists in any configured suite.`,
-      });
-    }
-  }
-
-  return results;
-}
-
-/**
  * Build a single persona for a single output target.
+ *
+ * **Does not apply `targets`.** Per-persona target filtering (see
+ * `resolvePersonaTargets()` in `src/builders/persona-index.ts`) is a
+ * `buildSuite()`/`build()` concern only — `buildPersona()` always renders
+ * and (unless `check` mode) writes the requested persona × target
+ * combination, regardless of the persona's declared or resolved `targets`.
+ * A direct `buildPersona()` call is an explicit request to build exactly
+ * that one combination, so it is never silently skipped.
  *
  * Pipeline:
  *   1. Load sharedMeta + personaMeta (callers supply pre-loaded values)
@@ -461,7 +386,12 @@ function validateSubagentRefs(
  *                         persona across all suites.
  * @param plugins          Registered plugins
  * @param target           Target output format
- * @param agentMap         Pre-built cross-suite agent name map
+ * @param agentMap         Pre-built cross-suite agent name map. Unchanged in
+ *                         role and position: still the sole source of the
+ *                         `agent_*` context variables (layer 6 of 7), and
+ *                         still the key source for the sub-agent
+ *                         unknown-slug check regardless of whether
+ *                         `personaIndex` is supplied.
  * @param registry         Target registry to use. Defaults to `defaultRegistry`.
  *   **Two-registry limitation:** If you pass a custom `TargetRegistry` only
  *   to `build()` (via `config.targetRegistry`) and call `buildPersona()`
@@ -469,6 +399,15 @@ function validateSubagentRefs(
  *   will not be visible — `defaultRegistry` will be used instead. Either
  *   pass the same registry instance explicitly, or call `build()` to have
  *   the registry forwarded automatically.
+ * @param personaIndex     Optional cross-suite `PersonaIndex` (see
+ *   `src/builders/persona-index.ts`), enabling `validateSubagentRefs()`'s
+ *   target-aware check — a declared sub-agent slug that exists but is not
+ *   built for `target` becomes a second, independent error. When omitted,
+ *   only the unknown-slug check (keyed on `agentMap`) runs, exactly as
+ *   before this parameter existed. Note this is unrelated to per-persona
+ *   `targets` filtering: `buildPersona()` never applies `targets` to itself
+ *   (see the note above) — `personaIndex` here only informs the sub-agent
+ *   reference check.
  * @returns                BuildResult for this persona × target combination
  */
 export async function buildPersona(
@@ -482,6 +421,7 @@ export async function buildPersona(
   target: string,
   agentMap: Record<string, string> = {},
   registry: TargetRegistry = defaultRegistry,
+  personaIndex?: PersonaIndex,
 ): Promise<BuildResult> {
   // ── 1. Load persona metadata ──────────────────────────────────────────────
   const personaMeta = await loadPersonaYaml(personaYamlPath);
@@ -541,16 +481,38 @@ export async function buildPersona(
   // ── 9. Plugin onPostRender ────────────────────────────────────────────────
   output = runPostRender(plugins, output, personaMetaTyped, target);
 
-  // ── 10. Plugin onValidate + subagent ref validation ─────────────────────
+  // ── 10. Plugin onValidate + subagent ref validation + tool requirements ──
+  // Resolve the registry definition once — used for tool-requirement
+  // validation here, and for outputDirKey / filenameContextKey below (step 11).
+  const def = registry.has(target) ? registry.get(target) : undefined;
+
+  // effectiveTools feeds both validateToolRequirements() and the returned
+  // BuildResult — a target absent from the registry (no TargetDefinition)
+  // has no capability map to resolve against, so effectiveTools stays
+  // undefined and the tool-requirements check is skipped entirely for it.
+  const effectiveTools = def ? resolveTargetTools(context, def) : undefined;
+
+  const appliedToolRequirements = computeAppliedToolRequirements(config);
+  const triggeredToolRequirements = appliedToolRequirements.filter((requirement) =>
+    isToolRequirementTriggered(requirement, context, bodyTemplate, personaPartialsMap),
+  );
+
   const validationResults: ValidationResult[] = [
     ...runValidate(plugins, personaMetaTyped, suiteConfig, target),
-    ...validateSubagentRefs(personaMetaTyped, agentMap),
+    ...validateSubagentRefs(personaMetaTyped, agentMap, personaIndex, target),
+    ...(def
+      ? validateToolRequirements({
+          personaName: personaMetaTyped.name,
+          target,
+          effectiveTools,
+          triggered: triggeredToolRequirements,
+          definition: def,
+          registry,
+        })
+      : []),
   ];
 
   // ── 11. Determine output file path ────────────────────────────────────────
-  // Resolve the registry definition once — used for both outputDirKey (map
-  // lookup) and filenameContextKey (output filename override).
-  const def = registry.has(target) ? registry.get(target) : undefined;
   const outputDir = resolveOutputDir(target, suiteConfig, def);
   // Use the filename context key declared in the target's registry definition,
   // falling back to the content basename when absent or unset in context.
@@ -579,6 +541,7 @@ export async function buildPersona(
     content: output,
     validationResults,
     written,
+    effectiveTools,
   };
 }
 
@@ -595,7 +558,11 @@ export async function buildPersona(
  *   3. Run `onSuiteInit` on all plugins
  *   4. Run `onPartials` on all plugins (highest priority: may override any file-based partial)
  *   5. Discover all persona YAML files
- *   6. Call `buildPersona()` for each
+ *   6. Call `buildPersona()` for each persona resolved to build for `target`
+ *      (see `personaIndex` below) — an excluded persona is skipped entirely:
+ *      no context is built, no plugin hooks run, and nothing is written.
+ *      `build()` records these skips in `BuildSummary.skipped`; a direct
+ *      `buildSuite()` caller sees only the (already-filtered) `BuildResult[]`.
  *
  * @param suiteName    Identifier for this suite
  * @param suiteConfig  Suite configuration
@@ -610,7 +577,22 @@ export async function buildPersona(
  *   will not be visible — `defaultRegistry` will be used instead. Either
  *   pass the same registry instance explicitly, or call `build()` to have
  *   the registry forwarded automatically.
- * @returns            Array of BuildResult objects, one per persona
+ * @param personaIndex Optional cross-suite `PersonaIndex` (see
+ *   `src/builders/persona-index.ts`), used to look up each persona's
+ *   resolved `targets` by YAML path without re-scanning. When omitted,
+ *   `buildSuite()` scans its own suite alone (`scanPersonas()` over a
+ *   single-suite `BuildConfig`) to resolve the same information — a direct
+ *   `buildSuite()` call therefore still filters correctly, at the cost of
+ *   one extra suite-local scan. Note this differs from `buildPersona()`,
+ *   which never applies `targets` regardless of whether an index is
+ *   available — target filtering is a `buildSuite()`/`build()` concern only,
+ *   since a direct `buildPersona()` call is an explicit request to build
+ *   exactly that one persona × target combination. The same index (given or
+ *   self-scanned) is also forwarded to every `buildPersona()` call, enabling
+ *   `validateSubagentRefs()`'s target-aware check there.
+ * @returns            Array of BuildResult objects, one per persona resolved
+ *                     to build for `target` (excluded personas are omitted,
+ *                     not represented by a null or failed entry)
  */
 export async function buildSuite(
   suiteName: string,
@@ -620,6 +602,7 @@ export async function buildSuite(
   target: string,
   agentMap: Record<string, string> = {},
   registry: TargetRegistry = defaultRegistry,
+  personaIndex?: PersonaIndex,
 ): Promise<BuildResult[]> {
   // ── 1. Load shared metadata ───────────────────────────────────────────────
   const metaSubdir = suiteConfig.metaSubdir ?? 'meta';
@@ -651,9 +634,30 @@ export async function buildSuite(
   // ── 5. Discover persona YAML files ───────────────────────────────────────
   const personaYamlPaths = await discoverSuitePersonaYamls(suiteConfig);
 
-  // ── 6. Build each persona ────────────────────────────────────────────────────
+  // Resolve each persona's `targets`, reusing the given cross-suite index
+  // when available. Without one, self-scan this suite alone — this is what
+  // lets a direct buildSuite() call (no index) still filter correctly (see
+  // the `personaIndex` @param note above).
+  const index = personaIndex ?? (await scanPersonas({ suites: { [suiteName]: suiteConfig } }, registry));
+  const resolvedTargetsByYamlPath = new Map<string, string[]>();
+  for (const entry of index.entries) {
+    if (entry.suite === suiteName) {
+      resolvedTargetsByYamlPath.set(entry.yamlPath, entry.targets);
+    }
+  }
+
+  // ── 6. Build each persona resolved to build for `target` ─────────────────
   const results: BuildResult[] = [];
   for (const yamlPath of personaYamlPaths) {
+    const resolvedTargets = resolvedTargetsByYamlPath.get(yamlPath);
+    // A persona absent from the index (should not normally happen — the
+    // index was scanned from the same suite directory) is built rather than
+    // silently dropped: an unresolvable filtering decision must not delete
+    // output.
+    if (resolvedTargets && !resolvedTargets.includes(target)) {
+      continue;
+    }
+
     const result = await buildPersona(
       yamlPath,
       suiteName,
@@ -665,6 +669,7 @@ export async function buildSuite(
       target,
       agentMap,
       registry,
+      index,
     );
     results.push(result);
   }
@@ -681,6 +686,21 @@ export async function buildSuite(
  *
  * Iterates all `config.suites × config.targets` combinations, calls
  * `buildSuite()` for each, and aggregates the results into a `BuildSummary`.
+ * A persona whose resolved `targets` (see `resolvePersonaTargets()`) exclude
+ * a given target is not built for it — `buildSuite()` skips it, and `build()`
+ * records the skip in `BuildSummary.skipped` (derived from the same
+ * `PersonaIndex` `buildSuite()` used, so the two cannot disagree). Errors
+ * found while resolving `targets` (unknown target, non-string entry, empty
+ * array) — and unrecognised `tool_parity_exceptions` names — are surfaced in
+ * `BuildSummary.issues`.
+ *
+ * After every suite × target has built, a **capability parity post-pass**
+ * groups results by `personaYamlPath` and runs `validateToolParity()` across
+ * every target the persona was actually built for (only targets with a
+ * capability map and a defined `effectiveTools` participate) — this cannot
+ * run inside `buildPersona()`/`buildSuite()`, since a single-target build
+ * never sees another target's effective tool list. Findings are appended
+ * directly to the lacking target's own `BuildResult.validationResults`.
  *
  * Modes:
  *   - Normal: renders and writes all personas.
@@ -706,26 +726,112 @@ export async function build(config: BuildConfig): Promise<BuildSummary> {
   const targets = config.targets ?? registry.names().filter(n => registry.get(n).defaultEnabled !== false);
   const allResults: BuildResult[] = [];
 
-  // Pre-scan: build cross-suite agent name map
-  const agentMap = await buildAgentNameMap(config);
+  // Pre-scan: index every persona once (targets, parity exceptions, and the
+  // data the cross-suite agent name map is derived from), then derive the
+  // agent map from it. Deriving both from a single scan means they cannot
+  // disagree — see persona-index.ts.
+  const personaIndex = await scanPersonas(config, registry);
+  const agentMap = agentNameMapFromIndex(personaIndex);
+
+  const skipped: SkippedBuild[] = [];
 
   for (const [suiteName, suiteConfig] of Object.entries(config.suites)) {
     for (const target of targets) {
-      const suiteResults = await buildSuite(suiteName, suiteConfig, config, plugins, target, agentMap, registry);
+      const suiteResults = await buildSuite(
+        suiteName,
+        suiteConfig,
+        config,
+        plugins,
+        target,
+        agentMap,
+        registry,
+        personaIndex,
+      );
       allResults.push(...suiteResults);
     }
   }
 
-  // Collect strict failures (error + warning severity)
-  const strictFailures: ValidationResult[] = config.strict
-    ? allResults.flatMap((r) =>
-        r.validationResults.filter(
-          (v) => v.severity === 'error' || v.severity === 'warning',
-        ),
-      )
-    : [];
+  // Every persona × active-target combination whose resolved `targets`
+  // excluded that target was skipped by buildSuite() above (never built,
+  // never written). Derived directly from the same index buildSuite() used,
+  // so this list cannot disagree with what was actually skipped.
+  for (const entry of personaIndex.entries) {
+    for (const target of targets) {
+      if (!entry.targets.includes(target)) {
+        skipped.push({ suite: entry.suite, target, personaYamlPath: entry.yamlPath });
+      }
+    }
+  }
 
-  const success = !config.strict || strictFailures.length === 0;
+  // ── Capability parity post-pass ────────────────────────────────────────────
+  // Runs after every suite × target has built, since a single-target
+  // buildPersona() call never sees another target's effective tool list.
+  // Groups results by personaYamlPath — a persona excluded from a given
+  // target via `targets` simply has no BuildResult for it, so it naturally
+  // never participates against that target.
+  const resultsByYamlPath = new Map<string, BuildResult[]>();
+  for (const result of allResults) {
+    const bucket = resultsByYamlPath.get(result.personaYamlPath);
+    if (bucket) {
+      bucket.push(result);
+    } else {
+      resultsByYamlPath.set(result.personaYamlPath, [result]);
+    }
+  }
+
+  const entryByYamlPath = new Map(personaIndex.entries.map((entry) => [entry.yamlPath, entry]));
+
+  for (const [yamlPath, results] of resultsByYamlPath) {
+    // Only targets with a capability map and a defined effective tool list
+    // take part — this is what keeps deep-agents (no capability map) and
+    // any result with no resolved tool list out of the comparison entirely.
+    const perTarget: TargetCapabilitySet[] = [];
+
+    for (const result of results) {
+      if (result.effectiveTools === undefined) continue;
+      const def = registry.has(result.target) ? registry.get(result.target) : undefined;
+      if (!def?.toolCapabilities) continue;
+
+      perTarget.push({
+        target: result.target,
+        capabilities: resolveCapabilities(result.effectiveTools, def),
+        toolCapabilities: def.toolCapabilities,
+      });
+    }
+
+    const entry = entryByYamlPath.get(yamlPath);
+    const personaLabel = entry?.name ?? yamlPath;
+    const exceptions = entry?.toolParityExceptions ?? [];
+
+    const findings = validateToolParity(personaLabel, perTarget, exceptions);
+
+    for (const finding of findings) {
+      const targetResult = results.find((r) => r.target === finding.target);
+      targetResult?.validationResults.push(finding.result);
+    }
+  }
+
+  // Collect every error/warning-severity finding — both per-result
+  // validationResults (plugin onValidate, subagent refs, tool requirements,
+  // tool parity) and index-level issues (resolvePersonaTargets errors,
+  // unrecognised tool_parity_exceptions names). Unlike before, this is no
+  // longer gated behind `config.strict`: errors now fail every build by
+  // default (see plan §G), so the CLI and any caller need this list
+  // regardless of strict mode to know what to print and why `success` is
+  // false. `strictFailures` keeps its name and its error/warning-only
+  // filter, but now always includes `issues` too.
+  const strictFailures: ValidationResult[] = [
+    ...allResults.flatMap((r) => r.validationResults),
+    ...personaIndex.issues,
+  ].filter((v) => v.severity === 'error' || v.severity === 'warning');
+
+  const errors = strictFailures.filter((v) => v.severity === 'error').length;
+  const warnings = strictFailures.filter((v) => v.severity === 'warning').length;
+
+  // Errors always fail the build now — the sole prior consumer (AI Insights)
+  // and the library's own CLI have no other reason to see an error-severity
+  // result and continue silently. `strict` additionally fails on warnings.
+  const success = errors === 0 && (!config.strict || warnings === 0);
 
   const summary: BuildSummary = {
     success,
@@ -733,8 +839,15 @@ export async function build(config: BuildConfig): Promise<BuildSummary> {
     strictFailures,
     totalBuilt: allResults.length,
     totalWritten: allResults.filter((r) => r.written).length,
+    skipped,
+    issues: personaIndex.issues,
+    errors,
+    warnings,
   };
 
+  // The strict throw is unchanged: it only fires in strict mode. A
+  // non-strict build with errors returns `success: false` without throwing
+  // — callers (e.g. the CLI) check `summary.success` themselves.
   if (config.strict && !success) {
     const messages = strictFailures.map((f) => `[${f.severity}] ${f.message}`).join('\n');
     throw new Error(

@@ -5,7 +5,7 @@
  * Re-exports every public symbol from the builders layer.
  */
 
-export type { BuildConfig, BuildResult, BuildSummary } from './types.js';
+export type { BuildConfig, BuildResult, BuildSummary, SkippedBuild } from './types.js';
 
 export {
   DEFAULT_FRONTMATTER_VSCODE,
@@ -20,3 +20,11 @@ export {
   buildSuite,
   build,
 } from './persona-builder.js';
+
+export type { PersonaIndexEntry, PersonaIndex, TargetResolution } from './persona-index.js';
+
+export {
+  resolvePersonaTargets,
+  scanPersonas,
+  agentNameMapFromIndex,
+} from './persona-index.js';

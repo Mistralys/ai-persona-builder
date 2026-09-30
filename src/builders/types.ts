@@ -14,6 +14,7 @@
 
 import type { PersonaBuildPlugin, SuiteConfig, ValidationResult } from '../plugins/types.js';
 import type { TargetRegistry } from '../targets/registry.js';
+import type { ToolRequirement } from '../validators/tool-requirements-validator.js';
 
 // ---------------------------------------------------------------------------
 // Build configuration
@@ -155,6 +156,18 @@ export interface BuildConfig {
    * `'claude-code'`, and `'deep-agents'`) when not supplied.
    */
   targetRegistry?: TargetRegistry;
+
+  /**
+   * Additional `ToolRequirement`s to check alongside the built-in
+   * `SUBAGENT_DISPATCH_REQUIREMENT` (which always applies). A consumer
+   * requirement sharing an `id` with a built-in one replaces it.
+   *
+   * See `ToolRequirement` and `validateToolRequirements()` in
+   * `src/validators/tool-requirements-validator.ts`. Consumers use this to
+   * declare their own dispatch triggers — for example, a handoff partial
+   * that implies the persona must dispatch sub-agents.
+   */
+  toolRequirements?: ToolRequirement[];
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +192,30 @@ export interface BuildResult {
   validationResults: ValidationResult[];
   /** Whether the output file was written to disk (false in check mode) */
   written: boolean;
+  /**
+   * The persona's effective (post-`onBuildContext`) tool list for `target`,
+   * resolved via `resolveTargetTools()` — the same list
+   * `validateToolRequirements()` validated against. `undefined` when the
+   * target has no registered `TargetDefinition` (no capability map to
+   * resolve against). Consumed by the capability-parity post-pass in
+   * `build()` (a later step) to compare tool grants across a persona's
+   * built targets.
+   */
+  effectiveTools?: string[];
+}
+
+/**
+ * Identifies a persona × target combination that `build()` did not render
+ * because the persona's resolved `targets` (see `resolvePersonaTargets()` in
+ * `src/builders/persona-index.ts`) excluded that target.
+ */
+export interface SkippedBuild {
+  /** The suite identifier the skipped persona belongs to */
+  suite: string;
+  /** The target this persona was not built for */
+  target: string;
+  /** Absolute path to the persona YAML source file */
+  personaYamlPath: string;
 }
 
 /**
@@ -191,13 +228,43 @@ export interface BuildSummary {
   /** Individual results for each persona × target combination */
   results: BuildResult[];
   /**
-   * When `strict` mode is enabled and a failure was detected, this holds all
-   * ValidationResults with severity `'error'` or `'warning'` that caused the
-   * failure. Empty otherwise.
+   * Every `ValidationResult` with severity `'error'` or `'warning'` found
+   * anywhere in the build — every result's `validationResults` plus `issues`
+   * (see below). Populated unconditionally (not only in `strict` mode, as
+   * before): error-severity results now fail every build by default (see
+   * `success`), so a caller needs this list regardless of `strict` to know
+   * what happened. In `strict` mode, this is also the list the thrown error
+   * message is built from.
    */
   strictFailures: ValidationResult[];
   /** Total number of persona files processed */
   totalBuilt: number;
   /** Total number of output files written (0 in check mode) */
   totalWritten: number;
+  /**
+   * Persona × target combinations skipped because the persona's resolved
+   * `targets` excluded that target. `buildPersona()` is never called for
+   * these — see `buildSuite()`'s per-persona target filtering.
+   */
+  skipped: SkippedBuild[];
+  /**
+   * Index-level results collected during the pre-scan, independent of any
+   * specific persona × target build result: error-severity `targets`
+   * resolution problems (unknown target, non-string entry, empty array —
+   * see `resolvePersonaTargets()`) and warning-severity unrecognised
+   * `tool_parity_exceptions` names. Also folded into `strictFailures`.
+   */
+  issues: ValidationResult[];
+  /**
+   * Count of error-severity results across every result's
+   * `validationResults` plus `issues`. Any error makes `success` false,
+   * regardless of `strict`.
+   */
+  errors: number;
+  /**
+   * Count of warning-severity results across every result's
+   * `validationResults` plus `issues`. Only affects `success` when `strict`
+   * is `true`.
+   */
+  warnings: number;
 }

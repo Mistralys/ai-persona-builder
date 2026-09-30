@@ -1,14 +1,17 @@
 /**
  * tests/engine/partials.test.ts
  *
- * Unit tests for src/engine/partials.ts — resolvePartials()
+ * Unit tests for src/engine/partials.ts — resolvePartials() and
+ * collectPartialReferences().
  *
  * Covers: normal resolution, nested partials (depth 1), depth limit (>= 2),
- * missing partials (warn + preserve marker), empty inputs, multiple markers.
+ * missing partials (warn + preserve marker), empty inputs, multiple markers,
+ * and (for collectPartialReferences) direct/nested reference collection with
+ * the same depth-2 cap and zero console output.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { resolvePartials } from '../../src/engine/partials.js';
+import { resolvePartials, collectPartialReferences } from '../../src/engine/partials.js';
 
 describe('resolvePartials()', () => {
   afterEach(() => {
@@ -126,5 +129,76 @@ describe('resolvePartials()', () => {
     const result = resolvePartials(text, { flag: 'true', variable: 'val' });
     // Only {{> name}} markers should be touched
     expect(result).toBe(text);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collectPartialReferences()
+// ---------------------------------------------------------------------------
+
+describe('collectPartialReferences()', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('finds a single direct reference', () => {
+    const result = collectPartialReferences('{{> greeting}}', { greeting: 'Hello' });
+    expect(result).toEqual(new Set(['greeting']));
+  });
+
+  it('finds multiple direct references in one string', () => {
+    const partials = { a: 'AAA', b: 'BBB' };
+    const result = collectPartialReferences('{{> a}} and {{> b}}', partials);
+    expect(result).toEqual(new Set(['a', 'b']));
+  });
+
+  it('finds a depth-1 nested reference', () => {
+    const partials = { outer: 'start {{> inner}} end', inner: 'INNER' };
+    const result = collectPartialReferences('{{> outer}}', partials);
+    expect(result).toEqual(new Set(['outer', 'inner']));
+  });
+
+  it('stops at the same depth-2 cap as resolvePartials() — a depth-3 reference is not collected', () => {
+    // 3-level chain: root → a → b → c. resolvePartials() leaves {{> c}}
+    // unresolved at depth 2 (see the parity test above); collection must
+    // mirror that boundary exactly — 'a' and 'b' are found, 'c' is not.
+    const partials = { a: '{{> b}}', b: '{{> c}}', c: 'deep' };
+    const result = collectPartialReferences('{{> a}}', partials);
+    expect(result).toEqual(new Set(['a', 'b']));
+    expect(result.has('c')).toBe(false);
+  });
+
+  it('records a reference even when the partial is not found in partialsMap', () => {
+    const result = collectPartialReferences('{{> known}} {{> unknown}}', { known: 'OK' });
+    expect(result).toEqual(new Set(['known', 'unknown']));
+  });
+
+  it('deduplicates a partial referenced more than once', () => {
+    const result = collectPartialReferences('{{> a}} {{> a}}', { a: 'AAA' });
+    expect(result).toEqual(new Set(['a']));
+  });
+
+  it('returns an empty set for text with no markers', () => {
+    expect(collectPartialReferences('no markers here', {})).toEqual(new Set());
+  });
+
+  it('returns an empty set for empty text', () => {
+    expect(collectPartialReferences('', {})).toEqual(new Set());
+  });
+
+  it('does not treat {{#if}} or {{variable}} as partial references', () => {
+    const text = '{{#if flag}}body{{/if}} {{variable}}';
+    expect(collectPartialReferences(text, { flag: 'true', variable: 'val' })).toEqual(new Set());
+  });
+
+  it('finds a partial name containing a hyphen', () => {
+    const result = collectPartialReferences('{{> my-block}}', { 'my-block': 'content' });
+    expect(result).toEqual(new Set(['my-block']));
+  });
+
+  it('emits no console output, unlike resolvePartials() with a missing partial', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    collectPartialReferences('{{> missing}}', {});
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

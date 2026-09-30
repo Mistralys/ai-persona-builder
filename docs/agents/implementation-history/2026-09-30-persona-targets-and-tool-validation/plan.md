@@ -244,7 +244,7 @@ ToolRequirement {
    - Replace the real directory `ai-insights/personas/node_modules/@mistralys/persona-builder` with a relative symlink: `ln -s ../../../../ai-persona-builder ai-insights/personas/node_modules/@mistralys/persona-builder`. On Windows, use `mklink /J` with absolute paths.
    - Do not edit `personas/package.json` or `personas/package-lock.json`.
    - Verify that `node scripts/build-personas.js --check` exits 0.
-   - Write `ai-persona-builder/docs/agents/plans/2026-09-29-persona-targets-and-tool-validation/dev-linking.md` (new) covering:
+   - Write `ai-persona-builder/docs/agents/plans/2026-09-30-persona-targets-and-tool-validation/dev-linking.md` (new) covering:
      - the link command
      - "rebuild the library (`npm run build`) after every change"
      - the revert command: `cd ai-insights/personas && rm node_modules/@mistralys/persona-builder && npm ci`
@@ -384,7 +384,7 @@ ToolRequirement {
 - **Modified tests:** `ai-persona-builder/tests/builders/subagent-validation.test.ts`, `tests/engine/partials.test.ts`, `tests/targets/target-registry.test.ts`, `tests/integration/build.test.ts`
 - **AI Insights modified:** `ai-insights/scripts/build-personas.js`, `ai-insights/scripts/lib/subagent-reference-validation.js`, `ai-insights/scripts/tests/subagent-reference-validation.test.js`, `ai-insights/personas/persona-build.config.js`, and the 17 persona YAMLs in step 19
 - **AI Insights removed:** `ai-insights/scripts/lib/cc-tools-validation.js`, `ai-insights/scripts/tests/cc-tools-validation.test.js`
-- **Dev only:** the symlink `ai-insights/personas/node_modules/@mistralys/persona-builder` → `ai-persona-builder/`; `docs/agents/plans/2026-09-29-persona-targets-and-tool-validation/dev-linking.md` (new)
+- **Dev only:** the symlink `ai-insights/personas/node_modules/@mistralys/persona-builder` → `ai-persona-builder/`; `docs/agents/plans/2026-09-30-persona-targets-and-tool-validation/dev-linking.md` (new)
 
 ## Assumptions
 

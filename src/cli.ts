@@ -5,13 +5,21 @@
  * Flags:
  *   --config <path>  Path to config file (JS/CJS/JSON). Default: persona-build.config.js
  *   --check          Run the build pipeline but do not write output files.
- *                    Always exits 0 unless combined with --strict, which causes
- *                    exit 1 when any ValidationResult has severity 'error' or
- *                    'warning'.
- *   --strict         Fail (exit 1) if any ValidationResult has severity
- *                    'error' or 'warning'.
+ *                    Still exits 1 if any ValidationResult has severity
+ *                    'error' — see the `success` semantics note below.
+ *                    Combine with --strict to also exit 1 on 'warning'.
+ *   --strict         Additionally fail (exit 1) if any ValidationResult has
+ *                    severity 'warning' (errors already fail every build,
+ *                    with or without this flag — see below).
  *   --help           Print usage and exit 0.
  *   --version        Print package version and exit 0.
+ *
+ * Build success: an error-severity ValidationResult (from a plugin, a
+ * built-in validator, or an index-level issue) now fails every build and
+ * exits 1, whether or not --strict is passed. --strict additionally fails
+ * on warning-severity results. This is a breaking change from the 2.x
+ * contract, where error-severity results were silently ignored unless
+ * --strict was passed — see the library CHANGELOG for the release note.
  *
  * No heavy CLI framework — args are parsed with a hand-rolled loop.
  */
@@ -49,18 +57,31 @@ OPTIONS
                     Supports .js (ESM), .cjs, and .json formats.
                     Default: persona-build.config.js in the current directory.
   --check           Render personas but skip writing output files.
-                    Always exits 0 on its own. Combine with --strict to
-                    exit 1 when validators report errors or warnings.
-  --strict          Exit 1 if any validation result has severity 'error'
-                    or 'warning'.
+                    Still exits 1 if any error-severity result is found —
+                    see "Build success" below. Combine with --strict to also
+                    exit 1 on warnings.
+  --strict          Additionally exit 1 if any validation result has
+                    severity 'warning'. Errors already fail the build with
+                    or without this flag.
   --help            Show this help message and exit.
   --version         Print the package version and exit.
 
+BUILD SUCCESS
+  An error-severity validation result — from a plugin, a built-in validator
+  (e.g. an unknown sub-agent, an ungranted dispatch tool, a cross-target
+  capability-parity mismatch), or an index-level issue (e.g. an invalid
+  \`targets\` field) — fails every build and exits 1, with or without
+  --strict. Use --strict to additionally fail on warning-severity results
+  (e.g. a tool name spelled in another target's notation).
+  Every error and warning is printed with its suite/target and persona file
+  (or, for index-level issues, its own embedded file path), alongside the
+  skipped-persona count and error/warning totals.
+
 EXAMPLES
-  persona-build                            # Build with default config
+  persona-build                            # Build; exits 1 on any error
   persona-build --config ./my-config.js   # Build with a custom config
   persona-build --check                   # CI staleness check (no file writes)
-  persona-build --strict                  # Fail on warnings or errors
+  persona-build --strict                  # Also fail on warnings
   persona-build --check --strict          # Safe CI check — no writes + strict
 `.trim();
 
@@ -225,10 +246,38 @@ function printSummary(summary: BuildSummary, check: boolean): void {
   if (!check) {
     console.log(`  Files written      : ${summary.totalWritten}`);
   }
-  if (summary.strictFailures.length > 0) {
-    console.log(`\n  Validation failures (${summary.strictFailures.length}):`);
-    for (const f of summary.strictFailures) {
-      console.log(`    [${f.severity}] ${f.message}`);
+  console.log(`  Skipped            : ${summary.skipped.length}`);
+  console.log(`  Errors             : ${summary.errors}`);
+  console.log(`  Warnings           : ${summary.warnings}`);
+
+  // Per-result findings — named by suite/target and the persona YAML file,
+  // since a single message can otherwise land on any of several personas
+  // built for the same target.
+  const perResultFindings = summary.results.flatMap((result) =>
+    result.validationResults
+      .filter((v) => v.severity === 'error' || v.severity === 'warning')
+      .map(
+        (v) =>
+          `    [${v.severity}] (${result.suite}/${result.target}) ` +
+          `${path.basename(result.personaYamlPath)}: ${v.message}`,
+      ),
+  );
+
+  if (perResultFindings.length > 0) {
+    console.log(`\n  Validation findings (${perResultFindings.length}):`);
+    for (const line of perResultFindings) {
+      console.log(line);
+    }
+  }
+
+  // Index-level issues aren't tied to a single suite/target/build result —
+  // they come from the pre-scan (e.g. an invalid `targets` field, or an
+  // unrecognised `tool_parity_exceptions` name), so they're printed
+  // separately. Their messages already name the offending persona YAML path.
+  if (summary.issues.length > 0) {
+    console.log(`\n  Index issues (${summary.issues.length}):`);
+    for (const issue of summary.issues) {
+      console.log(`    [${issue.severity}] ${issue.message}`);
     }
   }
 }
