@@ -1,5 +1,21 @@
 # Constraints & Conventions
 
+> **Scope:** Architectural invariants, naming rules, and known limitations of the library itself.
+> Conventions for authoring the manifest documents live in the [manifest README](README.md).
+
+## Contents
+
+- [Architectural Invariants](#architectural-invariants)
+- [Naming Conventions](#naming-conventions)
+- [Template Syntax](#template-syntax)
+- [package.json Path Conventions](#packagejson-path-conventions)
+- [Sub-Agent Validation Constraints](#sub-agent-validation-constraints)
+- [Known Limitations](#known-limitations)
+- [Directory Convention](#directory-convention)
+- [Test Suite](#test-suite)
+
+---
+
 ## Architectural Invariants
 
 ### 1. Zero-Dependency Engine Layer — MUST preserve
@@ -17,10 +33,6 @@ The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All six hook f
 ### 3. Strict + Check Mode Interaction
 
 When `strict: true` is used **without** `check: true`, `build()` writes all output files to disk before evaluating validation failures — leaving partial artefacts on failure. CI pipelines calling `build()` in validation mode **must** combine `strict: true` with `check: true` to avoid partial writes.
-
-### 4. Signatures Only — No Implementation in API Surface
-
-The `api-surface.md` manifest document contains only public constructors, properties, and method signatures. Never include method bodies, internal logic, or private members.
 
 ---
 
@@ -80,13 +92,13 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 ## Sub-Agent Validation Constraints
 
-### 7. `subagents` Slugs Must Reference Existing Cross-Suite Personas
+### 4. `subagents` Slugs Must Reference Existing Cross-Suite Personas
 
 `PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `buildAgentNameMap()` during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
 
 **Key derivation rule:** Slug `my-agent` maps to key `agent_slug_my_agent` (hyphens → underscores). The agent map is populated from the `slug` field of every persona YAML in all configured suites — a slug only resolves if the corresponding persona exists *and* is discoverable in the build configuration.
 
-**Strict mode:** When `strict: true` is set in `BuildConfig`, unknown slugs cause `buildSuite()` to throw after collecting all validation results. When not in strict mode, the errors are reported in `BuildResult.validationResults` but do not halt the build.
+**Strict mode:** When `strict: true` is set in `BuildConfig`, unknown slugs cause `buildSuite()` to throw after collecting all validation results. When not in strict mode, the errors are reported in `BuildResult.validationResults` but do not halt the build. See also invariant 3 on combining `strict` with `check`.
 
 **Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]`.
 
@@ -94,7 +106,7 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 ---
 
-### 8. Planned `onPreRender` Hook — Not Yet Implemented
+### 5. Planned `onPreRender` Hook — Not Yet Implemented
 
 > **Planned — not yet implemented.** This hook does not exist in the current library. The description below documents the *intended* design for a future release.
 
@@ -156,7 +168,7 @@ longer exported by this package. Any code that imports from
 `@mistralys/persona-builder/plugins/ledger` will receive an `ERR_PACKAGE_PATH_NOT_EXPORTED`
 error at runtime.
 
-### 8. Changelog-Derived Versioning
+### 7. Changelog-Derived Versioning
 
 `version` and `last_updated` in the template context are **always derived by `buildContext()` from the `changelog` YAML field** — they must not be set manually in per-persona YAML.
 
@@ -173,6 +185,8 @@ error at runtime.
 2. Do **not** add a `version:` key to per-persona YAML — it is silently overwritten by `buildContext()` and has no effect.
 3. Do **not** add a `last_updated:` key to per-persona YAML for version-date purposes — let it be derived from the `changelog` field. Explicit `last_updated:` in YAML is preserved but will not be overridden by the changelog date.
 4. The `default_version` key in `_shared.yaml` remains valid as a suite-wide fallback for personas with no `changelog` field.
+
+### 8. Partial Recursion Depth Cap Is Hardcoded at 2
 
 `resolvePartials()` uses a hardcoded recursion depth cap of `2`. This supports a "partial → nested partial → innermost partial" chain (two levels of nesting), but a third level is **not expanded** — the `{{> name}}` marker is left as-is in the output. This cap is **not configurable** via `BuildConfig` or any other option.
 

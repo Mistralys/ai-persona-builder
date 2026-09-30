@@ -137,6 +137,9 @@ from the merged context using `{{fieldName}}` syntax.
 | `inputs` | `string` | **ai-insights convention.** What this persona receives as input. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
 | `outputs` | `string` | **ai-insights convention.** What this persona produces as output. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
 | `notes` | `string` | **ai-insights convention.** Optional freeform note rendered as a **Notes:** bullet in the overview. Example: `"Runs in parallel with the Plan Auditor; never blocks it"`. |
+| `design_notes` | block scalar | **ai-insights convention.** Deliberate, documented deviations from the project's persona design guide, each naming the rule waived and the constraint forcing it. Read by auditing agents to distinguish accepted exceptions from defects. Not consumed by the engine or any template. |
+| `audit_guide_version` | `string` | **ai-insights convention.** Version of the persona design guide this persona was last audited against (e.g. `"2.9"`). Written only on a passing audit. Not consumed by the engine or any template. |
+| `audit_date` | `string` | **ai-insights convention.** ISO 8601 date of the last passing audit (e.g. `"2026-08-26"`). Not consumed by the engine or any template. |
 
 ---
 
