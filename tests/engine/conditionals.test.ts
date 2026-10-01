@@ -4,11 +4,15 @@
  * Unit tests for src/engine/conditionals.ts — resolveConditionals()
  *
  * Covers: truthy/falsy flags, {{else}} branch, no-else removal, unknown flags,
- * multiline content, empty inputs, nested structure.
+ * multiline content, empty inputs, nested structure, the tokenizer's
+ * whitespace contract (standalone vs. inline tags, blank-run merging), and
+ * literal pass-through of malformed tags.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { resolveConditionals } from '../../src/engine/conditionals.js';
+import { resolveConditionals, stripComments } from '../../src/engine/conditionals.js';
 
 describe('resolveConditionals()', () => {
   describe('basic truthy/falsy resolution', () => {
@@ -314,5 +318,246 @@ describe('resolveConditionals() — {{else if}} chains', () => {
     expect(result).toContain('C');
     expect(result).not.toContain('A');
     expect(result).not.toContain('D');
+  });
+});
+
+describe('resolveConditionals() — whitespace contract (tokenizer + block tree)', () => {
+  it('keeps blank lines around a truthy block', () => {
+    const text = 'Para one.\n\n{{#if a}}\nInside.\n{{/if}}\n\nPara two.';
+    expect(resolveConditionals(text, { a: true })).toBe(
+      'Para one.\n\nInside.\n\nPara two.',
+    );
+  });
+
+  it('removed block between paragraphs leaves one paragraph break (no else)', () => {
+    const text = 'Para one.\n\n{{#if a}}\nInside.\n{{/if}}\n\nPara two.';
+    expect(resolveConditionals(text, { a: false })).toBe(
+      'Para one.\n\nPara two.',
+    );
+  });
+
+  it('keeps blank lines around a chosen else branch', () => {
+    const text = 'Para one.\n\n{{#if a}}\nX\n{{else}}\nY\n{{/if}}\n\nPara two.';
+    expect(resolveConditionals(text, { a: false })).toBe(
+      'Para one.\n\nY\n\nPara two.',
+    );
+  });
+
+  it('keeps blank lines around a chosen else-if branch', () => {
+    const text =
+      'Intro:\n\n{{#if a}}\nA\n{{else if b}}\nB\n{{else}}\nC\n{{/if}}\n\nOutro.';
+    expect(resolveConditionals(text, { b: true })).toBe(
+      'Intro:\n\nB\n\nOutro.',
+    );
+  });
+
+  it('removed block between paragraphs leaves one paragraph break (all else-if falsy, final else)', () => {
+    const text =
+      'Intro:\n\n{{#if a}}\nA\n{{else if b}}\nB\n{{/if}}\n\nOutro.';
+    expect(resolveConditionals(text, {})).toBe('Intro:\n\nOutro.');
+  });
+
+  it('source without blank lines around standalone tags renders without blank lines', () => {
+    const text = 'Line one.\n{{#if a}}\nInside.\n{{/if}}\nLine two.';
+    expect(resolveConditionals(text, { a: true })).toBe(
+      'Line one.\nInside.\nLine two.',
+    );
+    expect(resolveConditionals(text, { a: false })).toBe(
+      'Line one.\nLine two.',
+    );
+  });
+
+  it('preserves whitespace symmetry: nested else output equals flat else output', () => {
+    const nested = '{{#if a}}TRUTHY{{else}}{{#if b}}B{{else}}C{{/if}}{{/if}}';
+    const flat = '{{#if a}}TRUTHY{{else}}C{{/if}}';
+    expect(resolveConditionals(nested, { a: false, b: false })).toBe(
+      resolveConditionals(flat, { a: false }),
+    );
+  });
+
+  it('keeps blank lines inside an outer branch around a nested block', () => {
+    const text =
+      '{{#if o}}\nRO\n{{else}}\nIntro:\n\n{{#if t}}\nT\n{{/if}}\n\nAfter.\n{{/if}}';
+    expect(resolveConditionals(text, { o: false, t: true })).toBe(
+      'Intro:\n\nT\n\nAfter.\n',
+    );
+  });
+
+  it('blank lines at the edges of a kept branch are emitted as written', () => {
+    const text = 'A\n\n{{#if a}}\n\nX\n\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, { a: true })).toBe('A\n\n\nX\n\n\nB');
+  });
+
+  it('the same block emitting nothing merges the outer runs', () => {
+    const text = 'A\n\n{{#if a}}\n\nX\n\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, { a: false })).toBe('A\n\nB');
+  });
+
+  it('inner block emitting nothing inside a kept outer branch merges its surrounding runs', () => {
+    const text = '{{#if o}}\nP\n\n{{#if i}}\nI\n{{/if}}\n\nQ\n{{/if}}';
+    expect(resolveConditionals(text, { o: true, i: false })).toBe('P\n\nQ\n');
+  });
+
+  it('inline conditional stays on its line', () => {
+    const text = 'Use the {{#if a}}Task{{else}}task{{/if}} tool.';
+    expect(resolveConditionals(text, { a: true })).toBe('Use the Task tool.');
+    expect(resolveConditionals(text, { a: false })).toBe('Use the task tool.');
+  });
+
+  it('mixed inline/multi-line frontmatter shape renders tight', () => {
+    const text = "description: 'd'\n{{#if model}}model: 'm'\n{{/if}}role: r";
+    expect(resolveConditionals(text, { model: true })).toBe(
+      "description: 'd'\nmodel: 'm'\nrole: r",
+    );
+    expect(resolveConditionals(text, { model: false })).toBe(
+      "description: 'd'\nrole: r",
+    );
+  });
+
+  it('tight source (table row + list) stays tight whether the block is kept or removed', () => {
+    const text = [
+      '| A | B |',
+      '{{#if show}}',
+      '| C | D |',
+      '- item one',
+      '- item two',
+      '{{/if}}',
+      '| E | F |',
+    ].join('\n');
+
+    expect(resolveConditionals(text, { show: true })).toBe(
+      ['| A | B |', '| C | D |', '- item one', '- item two', '| E | F |'].join(
+        '\n',
+      ),
+    );
+    expect(resolveConditionals(text, { show: false })).toBe(
+      ['| A | B |', '| E | F |'].join('\n'),
+    );
+  });
+
+  it('standalone tag with surrounding spaces or tabs is removed with its line', () => {
+    const text = 'A\n  {{#if a}}  \nInside\n\t{{/if}}\t\nB';
+    expect(resolveConditionals(text, { a: true })).toBe('A\nInside\nB');
+    expect(resolveConditionals(text, { a: false })).toBe('A\nB');
+  });
+
+  it('tag on the last line without a trailing newline keeps the preceding newline', () => {
+    const text = 'Before\n{{#if a}}\nInside{{/if}}';
+    expect(resolveConditionals(text, { a: true })).toBe('Before\nInside');
+  });
+
+  describe('malformed tags pass through literally', () => {
+    it('a stray {{/if}} with no opener', () => {
+      const text = 'before{{/if}}after';
+      expect(resolveConditionals(text, {})).toBe(text);
+    });
+
+    it('an unclosed {{#if}} with a balanced inner block that still resolves', () => {
+      const text = '{{#if a}}text{{#if b}}B{{/if}}more';
+      expect(resolveConditionals(text, { b: true })).toBe(
+        '{{#if a}}textBmore',
+      );
+      expect(resolveConditionals(text, { b: false })).toBe(
+        '{{#if a}}textmore',
+      );
+    });
+
+    it('an {{else}} outside a block', () => {
+      const text = 'before{{else}}after';
+      expect(resolveConditionals(text, {})).toBe(text);
+    });
+
+    it('an {{else if}} outside a block', () => {
+      const text = 'before{{else if a}}after';
+      expect(resolveConditionals(text, {})).toBe(text);
+    });
+
+    it('a second {{else}} in one block is kept as literal text of the final branch', () => {
+      const text = '{{#if a}}A{{else}}B{{else}}C{{/if}}';
+      expect(resolveConditionals(text, { a: false })).toBe('B{{else}}C');
+    });
+
+    it('a flag that does not match \\w+ leaves the tag as is', () => {
+      const text = '{{#if a-b}}content{{/if}}';
+      expect(resolveConditionals(text, {})).toBe(text);
+    });
+
+    it('does not recognise comment delimiters — comment syntax passes through as plain text', () => {
+      const text = '{{! note }}X';
+      expect(resolveConditionals(text, {})).toBe(text);
+      expect(resolveConditionals(text, { note: true })).toBe(text);
+    });
+  });
+
+  it('has no import statements in the module source', () => {
+    const modulePath = fileURLToPath(
+      new URL('../../src/engine/conditionals.ts', import.meta.url),
+    );
+    const source = readFileSync(modulePath, 'utf-8');
+    expect(source).not.toMatch(/^\s*import\b/m);
+  });
+});
+
+describe('stripComments()', () => {
+  it('removes a standalone long-form comment, including a multi-line one that contains }}', () => {
+    const text = 'A\n\n{{!-- note\nspanning }} lines --}}\n\nB';
+    expect(stripComments(text)).toBe('A\n\nB');
+  });
+
+  it('removes an inline short-form comment, leaving the rest of the line intact', () => {
+    const text = 'Use {{! short }}this.';
+    expect(stripComments(text)).toBe('Use this.');
+  });
+
+  it('leaves an {{else}} standalone once a trailing inline comment on its line is removed', () => {
+    const text = '{{else}}{{!-- fallback --}}\nX';
+    expect(stripComments(text)).toBe('{{else}}\nX');
+  });
+
+  it('removes a comment whose content is entirely other template syntax, inert', () => {
+    const text = '{{!-- {{> p}} {{#if a}} {{v}} --}}';
+    expect(stripComments(text)).toBe('');
+  });
+
+  it('leaves conditional tags and all other text untouched', () => {
+    const text = 'before{{#if a}}A{{else}}B{{/if}}after {{> partial}} {{variable}}';
+    expect(stripComments(text)).toBe(text);
+  });
+
+  it('returns text with no comment markers unchanged', () => {
+    const text = 'plain text without comments';
+    expect(stripComments(text)).toBe(text);
+  });
+
+  it('returns empty string unchanged', () => {
+    expect(stripComments('')).toBe('');
+  });
+
+  it('removes a standalone short-form comment between paragraphs, merging the blank runs', () => {
+    const text = 'Para one.\n\n{{! a note }}\n\nPara two.';
+    expect(stripComments(text)).toBe('Para one.\n\nPara two.');
+  });
+
+  it('removes multiple independent comments in one string', () => {
+    const text = '{{! first }}A{{!-- second --}}B';
+    expect(stripComments(text)).toBe('AB');
+  });
+
+  it('a short-form comment ends at the first }}, even if the note keeps going', () => {
+    // Documents the spec's asymmetry: only the long form tolerates a literal `}}`.
+    const text = '{{! {{#if a}} }}';
+    expect(stripComments(text)).toBe(' }}');
+  });
+
+  describe('malformed / unterminated comments pass through literally', () => {
+    it('an unterminated long-form comment (no closing --}})', () => {
+      const text = 'before{{!-- never closed';
+      expect(stripComments(text)).toBe(text);
+    });
+
+    it('an unterminated short-form comment (no closing }})', () => {
+      const text = 'before{{! never closed';
+      expect(stripComments(text)).toBe(text);
+    });
   });
 });

@@ -6,7 +6,7 @@
  */
 
 export { resolvePartials, collectPartialReferences } from './partials.js';
-export { resolveConditionals } from './conditionals.js';
+export { resolveConditionals, stripComments } from './conditionals.js';
 export { resolveVariables } from './variables.js';
 export {
   collapseBlankLines,

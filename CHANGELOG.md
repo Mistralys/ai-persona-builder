@@ -32,10 +32,28 @@ All notable changes to @mistralys/persona-builder will be documented in this fil
   `errors`, and `warnings`.
 - Engine: Added `collectPartialReferences()`, a pure zero-import function reporting which partials
   a template transitively references (mirrors `resolvePartials()`'s depth-2 cap).
+- **Fix:** `resolveConditionals()` no longer swallows the blank lines surrounding a
+  `{{#if}}…{{/if}}` block — a removed block between two paragraphs now leaves exactly one
+  paragraph break instead of joining them, and blank lines inside a kept branch are preserved
+  as written. An inline conditional tag (e.g. `` Use the {{#if a}}Task{{else}}task{{/if}} tool. ``)
+  now removes only the tag, without inserting a line break. `{{else if}}` chains are resolved
+  natively by a single-pass tokenizer instead of being pre-processed into nested `{{#if}}`
+  blocks.
+- Engine: Added template comments (`{{!-- … --}}`, `{{! … }}`) via `stripComments()`, applied
+  before partials, frontmatter and tool-requirement scans — a commented-out `{{> partial}}` or
+  `{{variable}}` neither expands nor warns, and shares the conditional tags' standalone/inline
+  whitespace contract.
+- Builder: `stripComments()` is wired into every template a persona build renders — the loaded
+  body template, the final per-persona partials map (covering config-, shared-, suite-, and
+  plugin-injected partials alike), and the frontmatter template — so a comment is inert before
+  partials expand, before the raw-template tool-requirement scan runs, and before frontmatter
+  conditionals resolve.
 - CLI: Prints every error and warning grouped by suite/target/persona, plus index-level issues,
   the skipped-persona count, and error/warning totals.
 - Tests: Added coverage for the persona index, target resolution, tool requirements, tool parity,
   and build success semantics.
+- Docs: Documented conditional whitespace rules (standalone vs. inline tags, blank-run merging,
+  malformed-tag pass-through) in `docs/template-syntax.md` and the API surface manifest.
 
 ## v2.6.1 - Bundle Documentation
 - Docs: All documentation is now bundled in the NPM package to keep it available.

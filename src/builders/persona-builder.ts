@@ -40,7 +40,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { resolvePartials, collectPartialReferences } from '../engine/partials.js';
-import { resolveConditionals } from '../engine/conditionals.js';
+import { resolveConditionals, stripComments } from '../engine/conditionals.js';
 import { resolveVariables } from '../engine/variables.js';
 import {
   collapseBlankLines,
@@ -309,10 +309,19 @@ function computeAppliedToolRequirements(config: BuildConfig): ToolRequirement[] 
  *     same trigger check can, in principle, give a different answer per
  *     target even though `bodyTemplate` itself does not vary by target.
  *
+ * Both `bodyTemplate` and `personaPartialsMap` must already be
+ * comment-stripped by the caller (`stripComments()`) — this function does
+ * not strip them itself. A commented-out `{{> partial}}` reference must
+ * never be counted as "referenced": `resolvePartials()` never expands it,
+ * so a trigger check that still saw it would disagree with what actually
+ * renders.
+ *
  * @param requirement        The requirement to test.
  * @param context             Post-`onBuildContext` rendering context.
- * @param bodyTemplate        Raw (unrendered) content template for this persona.
- * @param personaPartialsMap  This target's persona-scoped partials map.
+ * @param bodyTemplate        Raw (unrendered, but comment-stripped) content
+ *                            template for this persona.
+ * @param personaPartialsMap  This target's persona-scoped, comment-stripped
+ *                            partials map.
  * @returns                   `true` when the requirement's trigger condition holds.
  */
 function isToolRequirementTriggered(
@@ -351,9 +360,10 @@ function isToolRequirementTriggered(
  *   1. Load sharedMeta + personaMeta (callers supply pre-loaded values)
  *   2. Build merged context
  *   3. Run onBuildContext plugin hooks (context accumulation)
- *   4. Run onPersonaPartials plugin hooks (shallow-copy partials map, persona-scoped)
+ *   4. Run onPersonaPartials plugin hooks (shallow-copy partials map, persona-scoped);
+ *      then strip comments from the resulting map's entries
  *   5. Render frontmatter template → render frontmatter
- *   6. Load content template
+ *   6. Load content template, then strip comments from it
  *   7. Render body: partials → conditionals → variables → post-process
  *   8. Assemble final output (frontmatter + body)
  *   9. Run onPostRender plugin hooks (output chain)
@@ -457,6 +467,19 @@ export async function buildPersona(
     target,
   );
 
+  // Strip comments from every entry of the *final* persona partials map —
+  // this is the map's last mutation point regardless of whether a partial
+  // originated from BuildConfig.partials, the shared or suite partials
+  // directories, or an onPartials/onPersonaPartials plugin injection. A
+  // separate copy is built (rather than stripping in place) so that a
+  // comment-inertness bug in one persona's rendering pass can never be
+  // masked by, or leak into, another persona sharing the same suite-level
+  // partialsMap reference.
+  const strippedPersonaPartialsMap: Record<string, string> = {};
+  for (const [name, partial] of Object.entries(personaPartialsMap)) {
+    strippedPersonaPartialsMap[name] = stripComments(partial);
+  }
+
   // ── 5. Render frontmatter ─────────────────────────────────────────────────
   const fmTemplate = resolveFrontmatterTemplate(target, plugins, config.frontmatter, registry);
   const contentBasename = path.basename(personaYamlPath, '.yaml') + '.md';
@@ -465,10 +488,14 @@ export async function buildPersona(
   // ── 6. Load content template ──────────────────────────────────────────────
   const contentSubdir = suiteConfig.contentSubdir ?? 'content';
   const contentPath = path.join(suiteConfig.srcDir, contentSubdir, contentBasename);
-  const bodyTemplate = normalizeNewlines(await readFile(contentPath, 'utf8'));
+  // Strip comments immediately after load, before anything else — including
+  // the raw-template tool-requirement scan below (step 10) — ever sees this
+  // template. A commented-out `{{> partial}}` must never expand, warn, or
+  // trigger a `ToolRequirement` `partial` trigger.
+  const bodyTemplate = stripComments(normalizeNewlines(await readFile(contentPath, 'utf8')));
 
   // ── 7. Render body ────────────────────────────────────────────────────────
-  let body = resolvePartials(bodyTemplate, personaPartialsMap);
+  let body = resolvePartials(bodyTemplate, strippedPersonaPartialsMap);
   body = resolveConditionals(body, context);
   body = resolveVariables(body, context, contentBasename);
   body = collapseBlankLines(body);
@@ -494,7 +521,7 @@ export async function buildPersona(
 
   const appliedToolRequirements = computeAppliedToolRequirements(config);
   const triggeredToolRequirements = appliedToolRequirements.filter((requirement) =>
-    isToolRequirementTriggered(requirement, context, bodyTemplate, personaPartialsMap),
+    isToolRequirementTriggered(requirement, context, bodyTemplate, strippedPersonaPartialsMap),
   );
 
   const validationResults: ValidationResult[] = [
