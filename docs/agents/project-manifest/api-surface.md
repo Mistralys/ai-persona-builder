@@ -282,9 +282,23 @@ export function resolveConditionals(
 
 Evaluates `{{#if flag}}…{{/if}}`, `{{#if flag}}…{{else}}…{{/if}}`, and `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` (chain) blocks.
 
-`{{else if}}` chains are pre-processed by `resolveElseIf()` (internal), which rewrites each innermost `{{else if flag}}` segment into an equivalent `{{else}}{{#if flag}}` nested block before the main resolution pass. Multi-level chains are unwound iteratively — one level per pass — until the string stabilises.
+Implemented as a single-pass tokenizer plus a bracket-matching block resolver (`computeMatchClose()` builds a stack-matched tag list up front, then a single recursive `renderRange()` walk renders it): `{{else if}}` is resolved natively, with no pre-processing rewrite step.
 
-Nested `{{#if}}` blocks inside `{{else}}` branches are supported — resolved innermost-first across multiple passes until stable. `{{else if}}` chains may be freely mixed with traditional nested syntax. Unknown flags treated as falsy.
+Nested `{{#if}}` blocks inside `{{else}}` branches are supported — resolved in one pass over the bracket-matched tree, correct at any nesting depth. `{{else if}}` chains may be freely mixed with traditional nested syntax. Unknown flags treated as falsy.
+
+**Whitespace handling:** a conditional tag written standalone on its own line (only whitespace surrounding it) has its entire line, including the trailing newline, removed; an inline tag removes only the tag text, leaving the rest of the line intact. A block that resolves to nothing between two lines of content has its surrounding blank-line run merged down to a single paragraph break; blank lines that are part of a kept branch are emitted as written. Malformed or unterminated tags (stray `{{/if}}`, unclosed `{{#if}}`, an `{{else}}`/`{{else if}}` outside any block, a second `{{else}}` in one block, or a non-`\w+` flag name) pass through the output literally.
+
+`resolveConditionals()` resolves conditional tags only — it does not recognise comment delimiters (`{{!-- … --}}` / `{{! … }}`), so any comment in the input passes through it as literal text. A direct caller that wants both resolved must call `stripComments()` first.
+
+### `stripComments(text)`
+
+```ts
+export function stripComments(text: string): string;
+```
+
+Removes template comments — `{{!-- … --}}` (may span lines, may contain a literal `}}`) and `{{! … }}` (may span lines, cannot contain a literal `}}`) — using the same tokenizer as `resolveConditionals()` and the identical standalone/inline/blank-run-merge whitespace contract described above. Any tag or template syntax written inside a comment (a partial, conditional, or variable reference) is removed along with it and never separately recognised — this is what makes a commented-out reference fully inert. An unterminated `{{!--` or `{{!` passes through as literal text, exactly like a malformed conditional tag.
+
+This is the only place comments are removed: `resolveConditionals()` does not recognise comment delimiters. The builder calls `stripComments()` at every point a template reaches it — the loaded body template, the final per-persona partials map, and the frontmatter template — before partials, conditionals, or variables are resolved (see **Processing order** in `constraints.md`).
 
 ### `resolveVariables(text, context, filename)`
 
@@ -664,7 +678,7 @@ export function renderFrontmatter(
 ): string;
 ```
 
-Renders a frontmatter template string by applying conditionals then variable substitution.
+Renders a frontmatter template string by applying, in order, `stripComments()`, `resolveConditionals()`, then `resolveVariables()`. No partials step — frontmatter templates have none.
 
 ### `DEFAULT_FRONTMATTER_VSCODE`
 

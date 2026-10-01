@@ -63,17 +63,18 @@
 │
 ├── tests/
 │   ├── README.md                   # Test suite documentation
-│   ├── engine/                     # Engine module tests (90 tests)
+│   ├── helpers/                    # Shared test utilities, not Vitest test files (createMinimalSuite() fixture factory)
+│   ├── engine/                     # Engine module tests
 │   │   ├── partials.test.ts
 │   │   ├── conditionals.test.ts
 │   │   ├── variables.test.ts
 │   │   ├── postProcessor.test.ts
 │   │   └── serializer.test.ts
-│   ├── loaders/                    # Loader tests (40 tests)
+│   ├── loaders/                    # Loader tests
 │   │   ├── partials-loader.test.ts
 │   │   ├── metadata-loader.test.ts
 │   │   └── content-loader.test.ts
-│   ├── plugins/                    # Plugin system tests (46 tests)
+│   ├── plugins/                    # Plugin system tests
 │   │   └── plugin-runner.test.ts   # runSuiteInit, runBuildContext, runPostRender, runValidate, runPartials, runPersonaPartials
 │   ├── targets/                    # Target registry tests
 │   │   ├── target-registry.test.ts
@@ -81,7 +82,8 @@
 │   ├── builders/                   # Builder tests
 │   │   ├── agent-name-map.test.ts
 │   │   ├── build-config-variables-and-partials.test.ts
-│   │   ├── changelog-version.test.ts  # changelog-derived version + last_updated (12 tests)
+│   │   ├── build-success.test.ts       # success = errors === 0 && (!strict || warnings === 0)
+│   │   ├── changelog-version.test.ts   # changelog-derived version + last_updated
 │   │   ├── config-partials-and-on-partials.test.ts
 │   │   ├── config-suite-variables.test.ts
 │   │   ├── da-computed-fields.test.ts
@@ -90,17 +92,21 @@
 │   │   ├── persona-builder-edge-cases.test.ts
 │   │   ├── persona-index.test.ts       # scanPersonas()/agentNameMapFromIndex() cross-suite indexing
 │   │   ├── persona-targets.test.ts     # resolvePersonaTargets() rule cases
+│   │   ├── subagent-validation.test.ts # buildPersona()'s wired-in subagent slug validation
 │   │   ├── target-variable-injection.test.ts
-│   │   └── tool-parity.test.ts         # build()'s capability-parity post-pass — grouping/filtering integration cases
+│   │   ├── template-whitespace-and-comments.test.ts  # stripComments() wiring at all three builder strip points
+│   │   ├── tool-parity.test.ts         # build()'s capability-parity post-pass — grouping/filtering integration cases
+│   │   ├── tool-requirements.test.ts   # validateToolRequirements() wiring into buildPersona()
+│   │   └── tools-block-fields.test.ts  # tools_block/cc_tools_block/da_tools_block derivation
 │   ├── validators/                 # Validator tests
 │   │   ├── filename-validator.test.ts
 │   │   ├── strict-validator.test.ts
 │   │   ├── subagent-validator.test.ts           # validateSubagentRefs() unknown-slug/target-aware cases
 │   │   ├── tool-requirements-validator.test.ts  # validateToolRequirements() dispatch-grant/foreign-notation cases
 │   │   └── tool-parity-validator.test.ts        # validateToolParity() pure cross-target parity cases
-│   ├── utils/                      # Utility tests (25 tests)
+│   ├── utils/                      # Utility tests
 │   │   └── changelog.test.ts       # resolveChangelogMeta() unit tests
-│   └── integration/                # End-to-end integration tests (20 tests)
+│   └── integration/                # End-to-end integration tests
 │       └── build.test.ts
 │
 ├── fixtures/                       # Test fixtures

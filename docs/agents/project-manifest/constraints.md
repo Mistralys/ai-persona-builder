@@ -91,16 +91,20 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 
 | Syntax | Purpose | Processor |
 |--------|---------|-----------|
+| `{{!-- comment --}}` | Comment (multi-line, may contain a literal `}}`) | `stripComments()` — run first, before everything else |
+| `{{! comment }}` | Comment (multi-line, cannot contain a literal `}}`) | `stripComments()` — run first, before everything else |
 | `{{> partialName}}` | Partial inclusion | `resolvePartials()` — depth-2 recursion |
 | `{{#if flag}}…{{/if}}` | Conditional block | `resolveConditionals()` |
 | `{{#if flag}}…{{else}}…{{/if}}` | Conditional with fallback | `resolveConditionals()` |
-| `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` via pre-processor |
+| `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` — resolved natively by the tokenizer, no rewrite pre-pass |
 | `{{variableName}}` | Variable substitution | `resolveVariables()` |
 | `\{{varName}}` | Escaped variable marker (literal pass-through, no warning) | `resolveVariables()` |
 
 > **Escape syntax note:** The backslash prefix is consumed by the engine and does **not** appear in the rendered output. `\{{varName}}` in a template produces `{{varName}}` verbatim in the final file — no substitution occurs and no unresolved-variable warning is emitted. To produce a literal `\{{varName}}` string in output (backslash included), use a double backslash: `\\{{varName}}` → `\{{varName}}`.
 
-**Processing order matters:** partials → conditionals → variables. Running them out of order will produce incorrect output.
+> **Comment whitespace note:** Both comment forms share the identical standalone/inline/blank-run-merge whitespace contract as conditional tags (see `api-surface.md`'s `stripComments()` entry). A standalone tag on its own line — conditional or comment — has its entire line removed; an unmatched or unterminated tag of either kind passes through the output literally.
+
+**Processing order matters:** stripComments → partials → conditionals → variables. Running them out of order will produce incorrect output — in particular, a comment must be stripped before the raw-template tool-requirement scan (see Sub-Agent Validation Constraints below) and before partials expand, or a commented-out `{{> partial}}` would still be treated as a live reference.
 
 ---
 
@@ -295,6 +299,15 @@ When a persona's resolved `targets` excludes a target it previously built for (e
 it does **not** delete any file already written there from a prior build. Consumers that rely on
 `targets` to retire stale output for a persona must delete the file themselves (e.g. as part of an
 output-directory pre-clean step, the pattern this plan's AI Insights consumer already uses).
+
+### 15. No Escape Form for a Literal `{{!`
+
+Unlike `{{variableName}}`, which has a backslash escape (`\{{varName}}`) for emitting a literal
+marker, comment tags have no equivalent. A template that needs to show the literal three-character
+sequence `{{!` in rendered output cannot do so directly — `stripComments()` has no escape syntax to
+suppress comment recognition for a specific occurrence. Splitting the sequence across two adjacent
+`{{variableName}}`/text boundaries, or emitting it from a variable's resolved value instead of
+writing it as template source, are the only workarounds until an escape form is added.
 
 ---
 

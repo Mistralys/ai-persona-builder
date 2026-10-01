@@ -53,13 +53,18 @@ build(config)
   │     │                 │      sharedMeta → personaMeta → derived fields → agentMap → target flags)
   │     │                 ├─ 3. Run onBuildContext hooks (context accumulation)
   │     │                 ├─ 4. Run onPersonaPartials hooks (per-persona partials accumulation;
-                 │      a shallow copy of partialsMap is created before the first hook
-                 │      so that persona-level overrides are isolated per persona)
+  │     │                 │      a shallow copy of partialsMap is created before the first hook
+  │     │                 │      so that persona-level overrides are isolated per persona), then
+  │     │                 │      stripComments() every entry of the resulting map into a second,
+  │     │                 │      stripped copy used for rendering and for the tool-requirement scan
+  │     │                 │      (step 11) — covers config-, shared-, suite-, and plugin-injected
+  │     │                 │      partials alike, since this is their last shared mutation point
   │     │                 ├─ 5. Resolve frontmatter template (plugin → config → default)
-  │     │                 ├─ 6. Render frontmatter (conditionals → variables)
-  │     │                 ├─ 7. Load content template (.md file)
+  │     │                 ├─ 6. Render frontmatter (stripComments → resolveConditionals → resolveVariables)
+  │     │                 ├─ 7. Load content template (.md file), then stripComments() it immediately —
+  │     │                 │      before the raw-template tool-requirement scan (step 11) ever sees it
   │     │                 ├─ 8. Render body:
-  │     │                 │     ├─ resolvePartials (depth-2 recursion)
+  │     │                 │     ├─ resolvePartials (depth-2 recursion, using the stripped partials map)
   │     │                 │     ├─ [PLANNED] onPreRender hooks — fires here, after partials but before
   │     │                 │     │   conditionals/variables (raw template still intact; inspection-only)
   │     │                 │     ├─ resolveConditionals
@@ -179,7 +184,10 @@ registration time. This eliminates the need for plugin or config-level overrides
    ↓ result: Suite-level partialsMap (shallow-copied per persona before step 4)
 4. onPersonaPartials hooks       (runPersonaPartials — per persona × target, after onBuildContext)
    ↓ result: Persona-scoped partialsMap (isolated per persona)
-5. resolvePartials(template, partialsMap)  ← depth-2 recursion
+5. stripComments() every entry   (produces a second, stripped copy — the suite-level and
+                                   persona-scoped maps above are never mutated in place)
+   ↓ result: Stripped, persona-scoped partialsMap
+6. resolvePartials(template, strippedPartialsMap)  ← depth-2 recursion
 ```
 
 ## 5. Plugin Hook Execution Order

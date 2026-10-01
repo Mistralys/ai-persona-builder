@@ -10,6 +10,35 @@ All public symbols are exported from `@mistralys/persona-builder`:
 | `buildSuite` | function | Build all personas in one suite for a single target, skipping any persona whose resolved `targets` exclude that target (see [Metadata Reference — Tier 4d](metadata-reference.md#tier-4d--per-target-persona-selection)). See JSDoc for the two-registry limitation when calling directly. |
 | `buildPersona` | function | Build a single persona for a single target. See JSDoc for the two-registry limitation when calling directly. |
 
+## Template engine
+
+Every function below lives in `src/engine/` and has zero external dependencies (see
+[`constraints.md` — Zero-Dependency Engine Layer](agents/project-manifest/constraints.md)). A
+direct caller composing them by hand (rather than going through `build()`/`buildPersona()`)
+must apply them in this order — each stage's output feeds the next:
+
+```
+stripComments → resolvePartials → resolveConditionals → resolveVariables
+```
+
+(`collapseBlankLines`, `ensureBlankLineBeforeHeadings`, and `normalizeNewlines` are
+post-processing steps applied after that chain; see [template-syntax.md](template-syntax.md)
+for the full syntax reference.)
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `stripComments(text)` | function `(text: string) => string` | Removes `{{!-- … --}}` and `{{! … }}` template comments, including any tag or marker written inside one (a partial, conditional, or variable reference is inert once commented out). Must run first — `resolveConditionals()` does not recognise comment delimiters. Example: `stripComments('{{!-- note --}}Hello')` → `'Hello'`. |
+| `resolvePartials(text, partialsMap, depth?)` | function `(text: string, partialsMap: Record<string, string>, depth?: number) => string` | Expands `{{> partialName}}` markers by substituting from `partialsMap`, recursing up to depth 2 (deeper nesting is left unresolved). `depth` is an internal recursion counter — omit it when calling directly. Example: `resolvePartials('{{> greeting}}', { greeting: 'Hi' })` → `'Hi'`. |
+| `collectPartialReferences(text, partialsMap)` | function `(text: string, partialsMap: Record<string, string>) => Set<string>` | Reports every partial name a template transitively references (direct + one level of nested reference, mirroring `resolvePartials()`'s depth-2 cap), without expanding anything. Used to check whether a partial (e.g. a dispatch block) is actually referenced before a `ToolRequirement`'s `partial` trigger fires. Example: `collectPartialReferences('{{> a}}', { a: '{{> b}}', b: 'x' })` → `Set { 'a', 'b' }`. |
+| `resolveConditionals(text, context)` | function `(text: string, context: Record<string, unknown>) => string` | Evaluates `{{#if flag}}…{{/if}}`, `{{#if flag}}…{{else}}…{{/if}}`, and `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` chains against `context`; unknown flags are falsy. Does not recognise comment delimiters — call `stripComments()` first if the input may contain comments. Example: `resolveConditionals('{{#if a}}yes{{/if}}', { a: true })` → `'yes'`. |
+| `resolveVariables(text, context, filename)` | function `(text: string, context: Record<string, unknown>, filename: string) => string` | Substitutes `{{varName}}` markers from `context`; `\{{varName}}` is an escape producing a literal `{{varName}}` with no warning. Missing variables emit a `[WARN]` (naming `filename`) but do not throw. Example: `resolveVariables('Hi {{name}}', { name: 'Ada' }, 'x.md')` → `'Hi Ada'`. |
+| `collapseBlankLines(text)` | function `(text: string) => string` | Collapses 3-or-more consecutive blank lines down to 2 (i.e. 4-or-more consecutive `\n` down to exactly `\n\n\n`) — post-render cleanup, not a hard one-blank-line rule. Example: `collapseBlankLines('a\n\n\n\nb')` → `'a\n\n\nb'`. |
+| `ensureBlankLineBeforeHeadings(text)` | function `(text: string) => string` | Inserts a blank line before every Markdown heading and horizontal rule that is missing one — corrects gaps caused by a partial's own `trimEnd()` abutting the next line. Example: `ensureBlankLineBeforeHeadings('text\n## Heading')` → `'text\n\n## Heading'`. |
+| `normalizeNewlines(text)` | function `(text: string) => string` | Normalises `\r\n` / `\r` line endings to `\n`. Applied when a content template is first loaded from disk. Example: `normalizeNewlines('a\r\nb')` → `'a\nb'`. |
+| `serializeTools(tools)` | function `(tools: string[]) => string` | Serialises a tool-name array into the single-line YAML flow-sequence format used in VS Code frontmatter (`tools: ['Read', 'Edit']`). |
+| `serializeToolsList(tools)` | function `(tools: string[]) => string` | Serialises a tool-name array into a comma-separated string for Claude Code frontmatter (`tools: Read, Edit`). |
+| `serializeToolsBlock(tools)` | function `(tools: string[]) => string` | Serialises a tool-name array into a Markdown bullet list, one tool per line — the format used by the `{{tools_block}}`/`{{cc_tools_block}}`/`{{da_tools_block}}` context variables. |
+
 ## Types
 
 | Export | Kind | Description |
