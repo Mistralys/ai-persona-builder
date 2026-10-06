@@ -77,7 +77,9 @@ npx persona-build --check --strict
 | [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, comments, and built-in context variables |
 | [Target Differences](docs/target-differences.md) | VS Code vs Claude Code — tool notation, frontmatter, filename conventions |
 | [Custom Variables & Dynamic Partials](docs/dynamic-partials.md) | Inject build-time variables and partial content at global, suite, or per-persona level |
+| [Building Skills](docs/building-skills.md) | Building `SKILL.md` files with a custom target registry |
 | [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface, hooks, and examples |
+| [Migrating to v3.0.0](docs/migrating-to-v3.md) | Upgrade guide — breaking changes, new validation checks, and what to do about them |
 
 **Reference:**
 

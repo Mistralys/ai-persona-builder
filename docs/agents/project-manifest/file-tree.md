@@ -127,11 +127,15 @@
     ├── getting-started.md          # Step-by-step tutorial with verified rendered output
     ├── metadata-reference.md       # All recognized YAML metadata fields by tier
     ├── api.md                      # Public exports reference
+    ├── building-skills.md          # Building SKILL.md files with a custom target registry
     ├── cli.md                      # CLI flags and config file format
     ├── configuration.md            # BuildConfig / SuiteConfig / BuildSummary reference
     ├── directory-convention.md     # Expected source layout
+    ├── dynamic-partials.md         # Build-time variables and partial injection (global/suite/persona)
+    ├── migrating-to-v3.md          # v3.0.0 upgrade guide — breaking changes and what to do
     ├── plugins.md                  # PersonaBuildPlugin interface and examples
-    ├── template-syntax.md          # Variables, partials, conditionals, built-in context vars
+    ├── target-differences.md       # VS Code vs Claude Code — tool notation, frontmatter, filenames
+    ├── template-syntax.md          # Variables, partials, conditionals, comments, built-in context vars
     └── agents/
         └── project-manifest/       # This manifest
 ```
