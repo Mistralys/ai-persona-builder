@@ -5,6 +5,7 @@ All notable changes to @mistralys/persona-builder will be documented in this fil
 ## v3.0.0 - Persona Targets & Tool Validation (proposed)
 > The version number is a proposal only — the final release version is set by the maintainer at
 > publish time.
+> Migration: see [docs/migrating-to-v3.md](docs/migrating-to-v3.md) for the full upgrade guide.
 - **Breaking:** Error-severity validation results now fail every build (and the CLI exits `1`)
   with or without `--strict` — previously only `strict` mode failed on them. This includes the
   unknown-sub-agent-slug error, which was silently ignored outside `strict` mode until now.
@@ -39,6 +40,12 @@ All notable changes to @mistralys/persona-builder will be documented in this fil
   now removes only the tag, without inserting a line break. `{{else if}}` chains are resolved
   natively by a single-pass tokenizer instead of being pre-processed into nested `{{#if}}`
   blocks.
+- **Fix:** `mergeMarkers()` now resolves a whole cluster of adjacent vanished blocks or
+  standalone comments — separated only by whitespace-only lines, including no gap at all — in a
+  single replacement, instead of merging each one against its immediate neighbour and leaving
+  the runs between them to add up. Two or more emits-nothing `{{#if}}` blocks (or standalone
+  comments) next to each other now leave exactly one paragraph break, the same guarantee a
+  single vanished block already had. A kept block's content still breaks the merge.
 - Engine: Added template comments (`{{!-- … --}}`, `{{! … }}`) via `stripComments()`, applied
   before partials, frontmatter and tool-requirement scans — a commented-out `{{> partial}}` or
   `{{variable}}` neither expands nor warns, and shares the conditional tags' standalone/inline

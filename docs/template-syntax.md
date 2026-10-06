@@ -130,6 +130,37 @@ paragraph break remains — content on either side of a vanished block never end
 separated by a gap larger than a single blank line. Blank lines that are part of a **kept**
 branch are emitted exactly as written and are not merged with blank lines outside the tag.
 
+Two or more vanished blocks sitting next to each other — separated only by blank lines, or
+with no gap at all — merge as a single unit, not one pair at a time:
+
+```
+Intro.
+
+{{#if a}}
+A
+{{/if}}
+
+{{#if b}}
+B
+{{/if}}
+
+Outro.
+```
+
+renders as:
+
+```
+Intro.
+
+Outro.
+```
+
+with `a` and `b` both falsy: the blank-line run before the first vanished block, the run
+between the two, and the run after the second all merge into the single blank line that
+separates `Intro.` from `Outro.`, exactly as if only one block had vanished. A block whose
+branch keeps real content breaks the chain — vanished blocks on either side of it never
+merge across that content.
+
 Malformed or unterminated conditional tags — a stray `{{/if}}`, an unclosed `{{#if}}`, an
 `{{else}}` or `{{else if}}` outside any block, a second `{{else}}` in the same block, or a
 flag name that isn't a plain `\w+` identifier — are left in the output exactly as written,
@@ -176,6 +207,21 @@ Comments share the same standalone/inline whitespace contract as conditional tag
 - **Blank-run merge:** where removing a standalone comment leaves a blank-line run directly
   above and another directly below, the two merge into the longer run instead of adding
   together — exactly as for a conditional block that emits nothing.
+- **Adjacent removals merge as one.** Two or more standalone comments next to each other —
+  separated only by blank lines, or with no gap at all — merge as a single unit, the same
+  way two adjacent vanished conditional blocks do:
+
+  ```
+  Intro.
+
+  {{!-- first note --}}
+
+  {{!-- second note --}}
+
+  Outro.
+  ```
+
+  renders as `Intro.\n\nOutro.`, not `Intro.` and `Outro.` separated by two blank lines.
 
 ```
 Line one.

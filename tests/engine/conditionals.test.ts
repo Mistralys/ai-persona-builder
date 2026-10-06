@@ -498,6 +498,51 @@ describe('resolveConditionals() — whitespace contract (tokenizer + block tree)
   });
 });
 
+describe('adjacent removals', () => {
+  it('two adjacent empty blocks between paragraphs leave one paragraph break (blank-separated)', () => {
+    const text =
+      'A\n\n{{#if a}}\nx\n{{/if}}\n\n{{#if b}}\ny\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, {})).toBe('A\n\nB');
+  });
+
+  it('two adjacent empty blocks between paragraphs leave one paragraph break (tight)', () => {
+    const text = 'A\n\n{{#if a}}\nx\n{{/if}}\n{{#if b}}\ny\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, {})).toBe('A\n\nB');
+  });
+
+  it('three adjacent empty blocks', () => {
+    const text =
+      'A\n\n{{#if a}}\nx\n{{/if}}\n\n{{#if b}}\ny\n{{/if}}\n\n{{#if c}}\nz\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, {})).toBe('A\n\nB');
+  });
+
+  it('adjacent empty blocks in tight source stay tight', () => {
+    const text = 'A\n{{#if a}}\nx\n{{/if}}\n{{#if b}}\ny\n{{/if}}\nB';
+    expect(resolveConditionals(text, {})).toBe('A\nB');
+  });
+
+  it('a kept block between two empty blocks is not merged across', () => {
+    const text =
+      'A\n\n{{#if a}}\nx\n{{/if}}\n\n{{#if k}}\nK\n{{/if}}\n\n{{#if b}}\ny\n{{/if}}\n\nB';
+    expect(resolveConditionals(text, { k: true })).toBe('A\n\nK\n\nB');
+  });
+
+  it('adjacent inline removals leave the line as before', () => {
+    const text = 'x {{#if a}}y{{/if}}{{#if b}}z{{/if}} w';
+    expect(resolveConditionals(text, {})).toBe('x  w');
+  });
+
+  it('Known Limitation 16: a literal NUL in source is dropped', () => {
+    // The internal EMPTY_BLOCK_MARKER ('\0') and a literal NUL byte in
+    // template source are indistinguishable to mergeMarkers() once a real
+    // tag elsewhere in the text has caused it to run. A kept {{#if}} branch
+    // is used here only to trigger that pass; the NUL sits inside the kept
+    // branch's own content and still vanishes silently.
+    const text = '{{#if x}}A\0B{{/if}}';
+    expect(resolveConditionals(text, { x: true })).toBe('AB');
+  });
+});
+
 describe('stripComments()', () => {
   it('removes a standalone long-form comment, including a multi-line one that contains }}', () => {
     const text = 'A\n\n{{!-- note\nspanning }} lines --}}\n\nB';
@@ -547,6 +592,31 @@ describe('stripComments()', () => {
     // Documents the spec's asymmetry: only the long form tolerates a literal `}}`.
     const text = '{{! {{#if a}} }}';
     expect(stripComments(text)).toBe(' }}');
+  });
+
+  it('adjacent standalone comments with no blank line between them merge', () => {
+    const text = 'A\n\n{{!-- a --}}\n{{!-- b --}}\n\nB';
+    expect(stripComments(text)).toBe('A\n\nB');
+  });
+
+  it('adjacent standalone comments separated by a blank line merge', () => {
+    const text = 'A\n\n{{!-- a --}}\n\n{{!-- b --}}\n\nB';
+    expect(stripComments(text)).toBe('A\n\nB');
+  });
+
+  it('empty long-form and short-form comment bodies', () => {
+    expect(stripComments('A\n{{!----}}\nB')).toBe('A\nB');
+    expect(stripComments('A\n{{!}}\nB')).toBe('A\nB');
+  });
+
+  it('standalone comment at end of string without trailing newline', () => {
+    const text = 'A\n{{!-- c --}}';
+    expect(stripComments(text)).toBe('A\n');
+  });
+
+  it('a single standalone comment between paragraphs is unchanged', () => {
+    const text = 'A\n\n{{!-- c --}}\n\nB';
+    expect(stripComments(text)).toBe('A\n\nB');
   });
 
   describe('malformed / unterminated comments pass through literally', () => {

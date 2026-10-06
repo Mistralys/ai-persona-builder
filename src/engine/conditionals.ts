@@ -298,19 +298,34 @@ function renderRange(
 }
 
 /**
- * Resolve every `EMPTY_BLOCK_MARKER` left by `renderRange()`. Where a
- * blank-line run sits directly before and/or after the marker, the two
- * runs merge into whichever is longer, instead of adding together (which
- * would leave one blank line too many). Where the marker is not flanked by
- * a blank-line run at all (an inline removal), it simply disappears.
+ * Resolve every `EMPTY_BLOCK_MARKER` left by `renderRange()`. A **cluster**
+ * — one or more markers where consecutive markers are separated only by a
+ * whitespace-only line run (a zero-length gap, i.e. two markers with
+ * nothing between them, also counts as "separated only by whitespace") —
+ * resolves as a single replacement together with the blank-line runs
+ * directly before the first marker and directly after the last. The
+ * replacement is `'\n'.repeat(n)`, where `n` is the maximum newline count
+ * across every run in the cluster (the leading run, every inter-marker run,
+ * and the trailing run). A single marker is a cluster of one, so it keeps
+ * merging its own before/after runs exactly as before. A cluster with no
+ * newline anywhere in it — every run empty, e.g. two inline markers with
+ * nothing but literal text around them — collapses to the empty string.
+ *
+ * A **kept** block's content breaks a cluster, because that content is not
+ * a whitespace-only run: two empty blocks separated by a kept block each
+ * resolve as their own one-marker cluster, so they are never merged across
+ * the content between them.
  * @internal
  */
 function mergeMarkers(text: string): string {
   return text.replace(
-    /((?:[ \t]*\n)*)\0((?:[ \t]*\n)*)/g,
-    (_match: string, before: string, after: string): string => {
+    /(?:[ \t]*\n)*(?:\0(?:[ \t]*\n)*)+/g,
+    (match: string): string => {
       const countNewlines = (run: string): number => (run.match(/\n/g) ?? []).length;
-      return '\n'.repeat(Math.max(countNewlines(before), countNewlines(after)));
+      const maxNewlines = match
+        .split('\0')
+        .reduce((max, run) => Math.max(max, countNewlines(run)), 0);
+      return '\n'.repeat(maxNewlines);
     },
   );
 }
@@ -345,6 +360,14 @@ function mergeMarkers(text: string): string {
  *   leaves exactly one paragraph break. This merge applies at any nesting
  *   depth, so a nested block emitting nothing inside a kept outer branch
  *   still merges its own surrounding runs.
+ * - **Adjacent removals merge as one.** Two or more emits-nothing blocks
+ *   separated only by whitespace-only lines (including no gap at all) form
+ *   a single cluster: the blank-line runs before the first block, between
+ *   every pair, and after the last all merge into one run — the longest of
+ *   them — rather than each block merging independently and the leftover
+ *   runs adding together. A block whose branch keeps real content breaks
+ *   the cluster, so emits-nothing blocks on either side of a kept block
+ *   never merge across it.
  *
  * Malformed input is left untouched, exactly as before: a stray `{{/if}}`
  * with no open block, an `{{else}}`/`{{else if}}` outside any block, an
@@ -401,6 +424,12 @@ export function resolveConditionals(
  *   blank-line run directly above and another directly below, the two
  *   merge into the longer run instead of adding together, exactly as for
  *   a conditional block that emits nothing.
+ * - **Adjacent removals merge as one.** Two or more standalone comments
+ *   separated only by whitespace-only lines (including no gap at all) form
+ *   a single cluster, merging into one longest run across every blank-line
+ *   run in the cluster — the same adjacent-removal contract
+ *   `resolveConditionals()` documents for emits-nothing blocks, since both
+ *   entry points share `mergeMarkers()`.
  *
  * Any tag or template syntax written inside a comment (a partial,
  * conditional, or variable reference) is inert: it is removed along with

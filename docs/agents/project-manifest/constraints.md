@@ -102,7 +102,7 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 
 > **Escape syntax note:** The backslash prefix is consumed by the engine and does **not** appear in the rendered output. `\{{varName}}` in a template produces `{{varName}}` verbatim in the final file — no substitution occurs and no unresolved-variable warning is emitted. To produce a literal `\{{varName}}` string in output (backslash included), use a double backslash: `\\{{varName}}` → `\{{varName}}`.
 
-> **Comment whitespace note:** Both comment forms share the identical standalone/inline/blank-run-merge whitespace contract as conditional tags (see `api-surface.md`'s `stripComments()` entry). A standalone tag on its own line — conditional or comment — has its entire line removed; an unmatched or unterminated tag of either kind passes through the output literally.
+> **Comment whitespace note:** Both comment forms share the identical standalone/inline/blank-run-merge whitespace contract as conditional tags (see `api-surface.md`'s `stripComments()` entry). A standalone tag on its own line — conditional or comment — has its entire line removed; an unmatched or unterminated tag of either kind passes through the output literally. Two or more removed tags — conditional blocks that resolve to nothing, standalone comments, or a mix separated only by whitespace-only lines (including no gap at all) — merge their surrounding blank-line runs into one, instead of merging pairwise and leaving leftover runs to add together; a kept block's content still breaks the merge.
 
 **Processing order matters:** stripComments → partials → conditionals → variables. Running them out of order will produce incorrect output — in particular, a comment must be stripped before the raw-template tool-requirement scan (see Sub-Agent Validation Constraints below) and before partials expand, or a commented-out `{{> partial}}` would still be treated as a live reference.
 
@@ -308,6 +308,25 @@ sequence `{{!` in rendered output cannot do so directly — `stripComments()` ha
 suppress comment recognition for a specific occurrence. Splitting the sequence across two adjacent
 `{{variableName}}`/text boundaries, or emitting it from a variable's resolved value instead of
 writing it as template source, are the only workarounds until an escape form is added.
+
+### 16. A Literal NUL Character in Template Source Is Dropped
+
+`resolveConditionals()` and `stripComments()` both signal "this block/comment resolved to
+nothing" internally with a single reserved character, `'\0'` (`EMPTY_BLOCK_MARKER`), then run
+one shared `mergeMarkers()` pass to collapse the surrounding blank-line runs. That marker and a
+literal NUL byte typed or pasted into template source are indistinguishable once the merge pass
+runs: the character is silently removed, along with any blank-line run directly around it,
+exactly as if it had been a vanished block or comment. This only surfaces once at least one real
+`{{#if}}`/`{{else}}`/`{{!--…--}}`/`{{!…}}` tag is present elsewhere in the same template — with no
+recognised tag at all, both functions return the input unchanged before the merge pass ever runs,
+so the literal NUL survives untouched in that case.
+
+A NUL byte in a Markdown template is malformed content — no editor or YAML/Markdown toolchain
+in this project's pipeline writes one deliberately. This is documented as a known limitation
+rather than engineered around: a dynamic per-call sentinel code point would need its own regex
+construction and branching to protect a case no template author actually exercises. The
+behaviour is pinned by a characterization test
+(`ai-persona-builder/tests/engine/conditionals.test.ts`, "Known Limitation 16").
 
 ---
 
