@@ -960,3 +960,107 @@ describe('build() integration — defaultEnabled target selection', () => {
     expect(targetNames).not.toContain('disabled-custom');
   });
 });
+
+// ---------------------------------------------------------------------------
+// WP-010: three-target build success-semantics integration
+// ---------------------------------------------------------------------------
+
+describe('build() integration — three-target build success semantics (WP-010)', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    for (const dir of tempDirs) {
+      await rm(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  it('a targets-restricted persona and a parity-exception persona report the expected results, skipped entries, file presence, and zero errors', async () => {
+    const base = path.join(FIXTURES_ROOT, 'wp010-tmp', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tempDirs.push(base);
+
+    const srcDir = path.join(base, 'src');
+    const outVscode = path.join(base, 'out', 'vscode');
+    const outClaudeCode = path.join(base, 'out', 'claude-code');
+    const outDeepAgents = path.join(base, 'out', 'deep-agents');
+
+    await mkdir(path.join(srcDir, 'meta'), { recursive: true });
+    await mkdir(path.join(srcDir, 'content'), { recursive: true });
+
+    await writeFile(path.join(srcDir, 'meta', '_shared.yaml'), "default_version: '1.0.0'\n");
+
+    // Persona A: restricted to claude-code only via `targets`.
+    await writeFile(
+      path.join(srcDir, 'meta', 'restricted-persona.yaml'),
+      [
+        'slug: restricted-persona',
+        'name: Restricted Persona',
+        'description: Test.',
+        "targets: ['claude-code']",
+        'cc_tools:',
+        '  - Read',
+        'vs_file_name: restricted-persona.agent.md',
+        'cc_file_name: restricted-persona.md',
+        'da_file_name: restricted-persona.md',
+      ].join('\n') + '\n',
+    );
+    await writeFile(path.join(srcDir, 'content', 'restricted-persona.md'), '# {{name}}\n');
+
+    // Persona B: builds for every target; grants `execute` on vscode but not
+    // on claude-code — exempted via tool_parity_exceptions, so no error.
+    await writeFile(
+      path.join(srcDir, 'meta', 'exception-persona.yaml'),
+      [
+        'slug: exception-persona',
+        'name: Exception Persona',
+        'description: Test.',
+        'tool_parity_exceptions:',
+        '  - execute',
+        'tools:',
+        '  - execute',
+        '  - read',
+        'cc_tools:',
+        '  - Read',
+        'vs_file_name: exception-persona.agent.md',
+        'cc_file_name: exception-persona.md',
+        'da_file_name: exception-persona.md',
+      ].join('\n') + '\n',
+    );
+    await writeFile(path.join(srcDir, 'content', 'exception-persona.md'), '# {{name}}\n');
+
+    const config: BuildConfig = {
+      suites: {
+        test: {
+          srcDir,
+          outputDirs: { vscode: outVscode, 'claude-code': outClaudeCode, 'deep-agents': outDeepAgents },
+        },
+      },
+      targets: ['vscode', 'claude-code', 'deep-agents'],
+    };
+
+    const summary = await build(config);
+
+    // restricted-persona: only claude-code (1 result); exception-persona: all 3 (3 results) = 4 total.
+    expect(summary.totalBuilt).toBe(4);
+    expect(summary.totalWritten).toBe(4);
+
+    // restricted-persona is skipped for vscode and deep-agents.
+    expect(summary.skipped).toHaveLength(2);
+    expect(summary.skipped.every((s) => s.personaYamlPath.endsWith('restricted-persona.yaml'))).toBe(true);
+    expect(summary.skipped.map((s) => s.target).sort()).toEqual(['deep-agents', 'vscode']);
+
+    // File presence: restricted-persona exists only under claude-code.
+    expect(existsSync(path.join(outClaudeCode, 'restricted-persona.md'))).toBe(true);
+    expect(existsSync(path.join(outVscode, 'restricted-persona.agent.md'))).toBe(false);
+    expect(existsSync(path.join(outDeepAgents, 'restricted-persona.md'))).toBe(false);
+
+    // exception-persona exists under all three targets.
+    expect(existsSync(path.join(outVscode, 'exception-persona.agent.md'))).toBe(true);
+    expect(existsSync(path.join(outClaudeCode, 'exception-persona.md'))).toBe(true);
+    expect(existsSync(path.join(outDeepAgents, 'exception-persona.md'))).toBe(true);
+
+    // Zero errors — the only capability mismatch is exempted via tool_parity_exceptions.
+    expect(summary.errors).toBe(0);
+    expect(summary.success).toBe(true);
+  });
+});

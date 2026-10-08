@@ -14,7 +14,7 @@
 |----------|----------|
 | [README.md](docs/agents/project-manifest/README.md) | Project overview, version, and manifest index. |
 | [tech-stack.md](docs/agents/project-manifest/tech-stack.md) | Runtime, frameworks, architectural patterns, build tooling, distribution format. |
-| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (22 source files, 15 test files, fixtures). |
+| [file-tree.md](docs/agents/project-manifest/file-tree.md) | Annotated directory structure (source, test, and fixture layout). |
 | [api-surface.md](docs/agents/project-manifest/api-surface.md) | All exported types, functions, and constants — signatures only. |
 | [data-flows.md](docs/agents/project-manifest/data-flows.md) | Build pipeline, context merge order, plugin hooks, CLI flow. |
 | [constraints.md](docs/agents/project-manifest/constraints.md) | Architectural invariants, naming rules, known limitations. |
@@ -91,7 +91,7 @@ When you change the codebase, update the corresponding manifest documents:
 | **Plugin hook needs async** | Do NOT add `async` to existing runner functions without a plan. Flag for discussion. | MUST |
 | **Adding a new npm dependency** | Justify in writing. Update `tech-stack.md`. Never add to `src/engine/`. | MUST |
 | **Output file naming mismatch** | Check `vs_file_name` / `cc_file_name` context fields first, then fall back to content basename. See `data-flows.md` §7. | SHOULD |
-| **Template rendering produces wrong output** | Verify processing order: partials → conditionals → variables. This order is mandatory. | MUST |
+| **Template rendering produces wrong output** | Verify processing order: stripComments → partials → conditionals → variables. This order is mandatory. | MUST |
 | **CI validation writes partial files** | Always combine `strict: true` with `check: true` in validation mode. | MUST |
 | **Path traversal concern** | Acceptable for build-time use with developer-controlled paths. Add a containment guard before any HTTP/CLI exposure. | SHOULD |
 | **Breaking change proposed** | Document before implementing. Flag for review. Never implement silently. | MUST |
@@ -128,7 +128,7 @@ Unclear → Pause and request user clarification
 | **Architecture** | Layered: builders → plugins → engine / loaders / validators |
 | **Package Manager** | npm |
 | **Build Tool** | tsup (dual CJS + ESM) |
-| **Test Framework** | Vitest (236 tests across 15 files) |
+| **Test Framework** | Vitest (run `npm test` for current suite/file counts) |
 | **Production Dependency** | `js-yaml` (sole) |
 | **License** | MIT |
 
@@ -179,7 +179,7 @@ See [`docs/agents/project-manifest/file-tree.md`](docs/agents/project-manifest/f
 npm test
 ```
 
-Runs all Vitest tests once (236 tests across 15 files). Use `npm run test:watch` during development.
+Runs all Vitest tests once. Use `npm run test:watch` during development.
 
 ### Build Command
 

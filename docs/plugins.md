@@ -251,7 +251,7 @@ string value — you choose the convention that suits your project.
 
 ## Built-in Validators
 
-The library exports two validator functions that plugins can use inside `onValidate` hooks:
+The library exports validator functions that plugins can use inside `onValidate` hooks:
 
 ### `validateStrictMarkers(renderedContent, requiredMarkers)`
 
@@ -280,12 +280,52 @@ const markerPlugin: PersonaBuildPlugin = {
 > **Note:** `validateStrictMarkers` operates on already-rendered output strings. It is a pure
 > function with no I/O. Call it wherever you have access to the rendered persona content.
 
-### `validateSubagentRefs(persona, agentMap)`
+### `validateSubagentRefs(persona, agentMap, index?, target?)`
 
 Validates that every slug declared in `persona.subagents` has a corresponding `agent_slug_*` key
-in `agentMap`. Called automatically by `buildPersona()` during the validation phase. See
+in `agentMap`, and — when a `PersonaIndex` and `target` are also supplied — that the slug is
+actually built for the target currently being rendered. Called automatically by `buildPersona()`
+during the validation phase; `buildSuite()`/`build()` pass their `personaIndex` through
+automatically, so the target-aware check is on by default for anything but a direct
+`buildPersona()` call made without an index. See
 [Metadata Reference — Sub-Agent Declarations](metadata-reference.md#tier-4c--sub-agent-declarations)
 for the full sub-agent lifecycle.
+
+### `validateToolRequirements(options)`
+
+Pure validator, driven entirely by the current target's `TargetDefinition.toolCapabilities`, that
+checks two things for a persona being built for a given target:
+
+1. **Dispatch grant** — a triggered `ToolRequirement` (e.g. the built-in
+   `SUBAGENT_DISPATCH_REQUIREMENT`, which fires when `subagents` is declared) whose effective
+   tool list grants none of the target's `dispatch` capability tools produces an `error`.
+2. **Foreign notation** — a tool present in the effective tool list but recognised only by
+   *another* registered target's notation (e.g. `read` showing up in a `claude-code` build)
+   produces a `warning` naming the recognising target and this target's equivalent tool names.
+
+```ts
+import { validateToolRequirements, SUBAGENT_DISPATCH_REQUIREMENT } from '@mistralys/persona-builder';
+
+const results = validateToolRequirements({
+  personaName: persona.name,
+  target,
+  effectiveTools: context.tools,
+  triggered: persona.subagents?.length ? [SUBAGENT_DISPATCH_REQUIREMENT] : [],
+  definition: registry.get(target),
+  registry,
+});
+```
+
+**Wired into the build pipeline.** `buildPersona()` now calls this validator automatically during
+its validation step, for every target with a registered `TargetDefinition`: it computes the
+applied requirements (the built-in `SUBAGENT_DISPATCH_REQUIREMENT` first, then
+`BuildConfig.toolRequirements`, with a config entry reusing a built-in `id` replacing it),
+determines which are triggered (`when.field` against the post-`onBuildContext` context,
+`when.partial` via `collectPartialReferences()`), and resolves `effectiveTools` via
+`resolveTargetTools()` — the same value now exposed on `BuildResult.effectiveTools`. A plugin can
+still call `validateToolRequirements()` directly from `onValidate`, as shown above, with its own
+`triggered` list — for example to validate a requirement whose trigger logic doesn't fit the
+built-in `field`/`partial` `when` shapes.
 
 ---
 

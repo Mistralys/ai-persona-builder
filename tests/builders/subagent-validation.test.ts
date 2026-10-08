@@ -8,6 +8,16 @@
  *   2. Persona with an unknown subagent slug → error-severity ValidationResult
  *   3. Persona without a subagents field → passes silently
  *   4. strict mode with an invalid slug → build throws
+ *
+ * Also covers WP-007 (target-aware sub-agent validation), end-to-end via
+ * build()/buildPersona() (unit coverage for validateSubagentRefs() itself
+ * lives in tests/validators/subagent-validator.test.ts):
+ *   5. A sub-agent slug built only for one target still errors when
+ *      referenced during a build for a different target
+ *   6. The same slug passes when referenced during a build for the target
+ *      it IS built for
+ *   7. buildPersona() called directly without a personaIndex skips the
+ *      target-aware check entirely (only the unknown-slug check runs)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -54,6 +64,10 @@ async function createTwoSuiteWorkspace(
   opts: {
     mainSubagents?: string[];
     standaloneSlug?: string;
+    /** WP-007: restrict the standalone persona's own resolved `targets`. */
+    standaloneTargets?: string[];
+    /** WP-007: build targets for the returned BuildConfig. Defaults to `['vscode']`. */
+    buildTargets?: string[];
   } = {},
 ): Promise<{
   mainSuiteConfig: SuiteConfig;
@@ -93,9 +107,13 @@ async function createTwoSuiteWorkspace(
     path.join(standaloneSuiteDir, 'meta', '_shared.yaml'),
     `default_version: '1.0.0'\n`,
   );
+  const targetsField =
+    opts.standaloneTargets !== undefined
+      ? `targets:\n${opts.standaloneTargets.map((t) => `  - ${t}`).join('\n')}\n`
+      : '';
   await writeFile(
     path.join(standaloneSuiteDir, 'meta', `${standaloneSlug}.yaml`),
-    `name: Helper Agent\nslug: ${standaloneSlug}\ndescription: A helper.\nvs_file_name: ${standaloneSlug}.agent.md\ncc_file_name: ${standaloneSlug}.md\n`,
+    `name: Helper Agent\nslug: ${standaloneSlug}\ndescription: A helper.\n${targetsField}vs_file_name: ${standaloneSlug}.agent.md\ncc_file_name: ${standaloneSlug}.md\n`,
   );
   await writeFile(
     path.join(standaloneSuiteDir, 'content', `${standaloneSlug}.md`),
@@ -123,7 +141,7 @@ async function createTwoSuiteWorkspace(
       main: mainSuiteConfig,
       standalone: standaloneSuiteConfig,
     },
-    targets: ['vscode'],
+    targets: opts.buildTargets ?? ['vscode'],
     check: true,
   };
 
@@ -301,5 +319,94 @@ describe('subagent slug validation — strict mode', () => {
 
     const summary: BuildSummary = await build(strictConfig);
     expect(summary.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP-007: target-aware sub-agent validation (end-to-end via build())
+// ---------------------------------------------------------------------------
+
+describe('subagent slug validation — target-aware (WP-007)', () => {
+  it('a sub-agent built only for claude-code yields an error on the vscode build result', async () => {
+    const { config } = await createTwoSuiteWorkspace(testTmpDir, {
+      mainSubagents: ['helper-agent'],
+      standaloneSlug: 'helper-agent',
+      standaloneTargets: ['claude-code'],
+      buildTargets: ['vscode', 'claude-code'],
+    });
+
+    const summary = await build(config);
+    // WP-010: an error-severity result (the target-aware check below) now
+    // fails every build by default, non-strict included — this test's own
+    // fixture intentionally produces one, so success must be false.
+    expect(summary.success).toBe(false);
+
+    const vscodeResult = summary.results.find(
+      (r) => r.target === 'vscode' && path.basename(r.outputPath) === 'main-persona.agent.md',
+    );
+    expect(vscodeResult).toBeDefined();
+    const vscodeErrors = vscodeResult!.validationResults.filter((r) => r.severity === 'error');
+    expect(vscodeErrors).toHaveLength(1);
+    expect(vscodeErrors[0].message).toContain('helper-agent');
+    expect(vscodeErrors[0].message).toContain('vscode');
+  });
+
+  it('the same sub-agent passes on the claude-code build result (the target it IS built for)', async () => {
+    const { config } = await createTwoSuiteWorkspace(testTmpDir, {
+      mainSubagents: ['helper-agent'],
+      standaloneSlug: 'helper-agent',
+      standaloneTargets: ['claude-code'],
+      buildTargets: ['vscode', 'claude-code'],
+    });
+
+    const summary = await build(config);
+
+    const ccResult = summary.results.find(
+      (r) => r.target === 'claude-code' && path.basename(r.outputPath) === 'main-persona.md',
+    );
+    expect(ccResult).toBeDefined();
+    const ccErrors = ccResult!.validationResults.filter((r) => r.severity === 'error');
+    expect(ccErrors).toHaveLength(0);
+  });
+
+  it('unknown slugs still error exactly as before, alongside the new target-aware check', async () => {
+    const { config } = await createTwoSuiteWorkspace(testTmpDir, {
+      mainSubagents: ['nonexistent-slug'],
+      buildTargets: ['vscode', 'claude-code'],
+    });
+
+    const summary = await build(config);
+    const vscodeResult = summary.results.find((r) => r.target === 'vscode');
+    const errors = vscodeResult!.validationResults.filter((r) => r.severity === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('nonexistent-slug');
+  });
+
+  it('buildPersona() called directly without a personaIndex skips the target-aware check (only unknown-slug runs)', async () => {
+    const { mainSuiteConfig, mainPersonaYamlPath, config } = await createTwoSuiteWorkspace(testTmpDir, {
+      mainSubagents: ['helper-agent'],
+      standaloneSlug: 'helper-agent',
+      standaloneTargets: ['claude-code'],
+    });
+
+    // agentMap says the slug is known (unknown-slug check passes); no
+    // personaIndex is passed, so the target-aware check must not fire even
+    // though 'helper-agent' would not be built for 'vscode'.
+    const agentMap: Record<string, string> = { agent_slug_helper_agent: 'helper-agent' };
+
+    const result = await buildPersona(
+      mainPersonaYamlPath,
+      'main',
+      mainSuiteConfig,
+      { default_version: '1.0.0' },
+      {},
+      config,
+      [],
+      'vscode',
+      agentMap,
+    );
+
+    const errors = result.validationResults.filter((r) => r.severity === 'error');
+    expect(errors).toHaveLength(0);
   });
 });

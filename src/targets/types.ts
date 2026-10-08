@@ -57,6 +57,39 @@ export interface TargetDefinition {
    * only be built when explicitly requested via `config.targets`.
    */
   defaultEnabled?: boolean;
+
+  /**
+   * Context key holding this target's tool list (e.g. `'cc_tools'` for
+   * claude-code, `'da_tools'` for deep-agents). Falls back to `'tools'` when
+   * omitted, or when the named key is absent/not an array in the context —
+   * see `pickToolList()` / `resolveTargetTools()` in `src/targets/tools.ts`.
+   */
+  toolsContextKey?: string;
+
+  /**
+   * Capability → the tool names that grant it on this target (any one of
+   * them is sufficient). Drives dispatch-grant, capability-parity, and
+   * foreign-notation validation (see `src/targets/tools.ts`).
+   *
+   * Deliberately rough by design: only a handful of basic capabilities are
+   * mapped (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`),
+   * plus `mcp:<server>` via `mcpToolPattern`. Tool names with no counterpart
+   * on another target (e.g. VS Code's `vscode`, `browser`) are simply absent
+   * from every capability list and are ignored by every check.
+   */
+  toolCapabilities?: Record<string, string[]>;
+
+  /**
+   * Pattern recognising this target's MCP tool-name notation. Group 1 must
+   * capture the MCP server name — a match grants capability `mcp:<server>`.
+   *
+   * **Must be non-global**: a pattern carrying the `g` or `y` flag gives
+   * `exec()`/`test()` mutable `lastIndex` state, and the same `RegExp`
+   * instance is shared between registry copies (see `TargetRegistry.clone()`),
+   * so match results would depend on call order. `TargetRegistry.register()`
+   * throws when a pattern carries either flag.
+   */
+  mcpToolPattern?: RegExp;
 }
 
 // ---------------------------------------------------------------------------

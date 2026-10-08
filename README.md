@@ -9,13 +9,15 @@ Define your AI agent personas as simple YAML metadata + Markdown templates, and 
 ## Features
 
 - **Multi-target output** — generates VS Code `.agent.md`, Claude Code `.md`, Deep Agents `.md`, and any custom format from a single source
-- **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, and context flags
-- **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, and `{{#if}}` conditionals
+- **Per-persona targets** — a persona YAML can list the subset of registered targets it builds for (`targets: [...]`); the builder skips the rest entirely — no wasted renders or writes, and no cleanup step needed in your build script
+- **Cross-target tool validation** — a rough capability map (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`, `mcp:<server>`) drives three build-time checks: a dispatching persona must grant dispatch on every target it builds for, a persona built for several targets must grant the same capabilities on each (with per-persona `tool_parity_exceptions`), and a tool spelled in another target's notation raises a warning
+- **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, context flags, and tool-capability map
+- **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, `{{#if}}` conditionals, and `{{!-- comments --}}`
 - **Shared + per-suite partials** — reuse content fragments across personas with local overrides
 - **Custom variables** — inject global or per-suite template variables via `BuildConfig.variables` and `SuiteConfig.variables` without touching persona YAML files
 - **Dynamic partials** — supply inline partials via `BuildConfig.partials`, or override them at suite or per-persona level through plugin hooks
 - **Plugin architecture** — hook into context building, post-rendering, validation, and frontmatter generation
-- **CI-friendly** — `--check` mode renders without writing; `--strict` exits non-zero on warnings
+- **CI-friendly** — any error-severity validation result fails the build and exits non-zero by default (no flag needed); `--check` mode renders without writing; `--strict` additionally exits non-zero on warnings
 - **Programmatic & CLI** — use the `build()` API in scripts or run `persona-build` from the command line
 - **Single runtime dependency** — only `js-yaml`
 
@@ -72,10 +74,12 @@ npx persona-build --check --strict
 |-------|-------------|
 | [Getting Started](docs/getting-started.md) | Step-by-step tutorial — build your first persona from scratch |
 | [Directory Convention](docs/directory-convention.md) | Expected source layout (`meta/`, `content/`, `partials/`) |
-| [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, and built-in context variables |
+| [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, comments, and built-in context variables |
 | [Target Differences](docs/target-differences.md) | VS Code vs Claude Code — tool notation, frontmatter, filename conventions |
 | [Custom Variables & Dynamic Partials](docs/dynamic-partials.md) | Inject build-time variables and partial content at global, suite, or per-persona level |
+| [Building Skills](docs/building-skills.md) | Building `SKILL.md` files with a custom target registry |
 | [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface, hooks, and examples |
+| [Migrating to v3.0.0](docs/migrating-to-v3.md) | Upgrade guide — breaking changes, new validation checks, and what to do about them |
 
 **Reference:**
 
@@ -85,6 +89,7 @@ npx persona-build --check --strict
 | [Configuration Reference](docs/configuration.md) | `BuildConfig`, `SuiteConfig`, and `BuildSummary` fields |
 | [CLI Reference](docs/cli.md) | Command-line flags, config file format, and common patterns |
 | [Public API](docs/api.md) | All exported types and functions |
+| [Releasing](docs/releasing.md) | Maintainer guide — changelog-first flow, pre-release checks, tagging and publishing |
 
 ## 📄 License
 

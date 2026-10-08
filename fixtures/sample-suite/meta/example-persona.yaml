@@ -6,4 +6,6 @@ cc_file_name: example-persona.md
 tools:
   - read
   - write
+cc_tools:
+  - Read
 show_advanced: true

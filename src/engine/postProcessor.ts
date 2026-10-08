@@ -23,9 +23,12 @@ export function collapseBlankLines(text: string): string {
  * Ensure every Markdown heading has a blank line immediately before it.
  *
  * Also ensures horizontal rules (`---`) have a blank line before and after
- * them. This corrects spacing gaps caused by partial concatenation where
- * `trimEnd()` strips trailing newlines and conditionals add only a single
- * `\n` delimiter.
+ * them. This corrects spacing gaps caused by partial concatenation where a
+ * partial's own `trimEnd()` (applied when the partial file is loaded) strips
+ * its trailing newlines, leaving the next line of content — or a heading —
+ * directly abutting it with no blank line in between. Conditional blocks no
+ * longer cause this gap themselves: `resolveConditionals()` preserves the
+ * blank lines surrounding a removed block (see `src/engine/conditionals.ts`).
  *
  * @param text - Rendered output string
  * @returns    String with blank lines inserted before headings and rules

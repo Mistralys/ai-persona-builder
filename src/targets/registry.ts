@@ -41,6 +41,11 @@ export class TargetRegistry {
    *
    * @param definition  The target descriptor to register.
    * @throws {Error}    If a target with the same `name` is already registered.
+   * @throws {Error}    If `definition.mcpToolPattern` carries the `g` or `y`
+   *                    flag — such a pattern gives `exec()`/`test()` mutable
+   *                    `lastIndex` state, and the same `RegExp` instance is
+   *                    shared between registry copies (see `clone()`), so
+   *                    match results would depend on call order.
    */
   register(definition: TargetDefinition): void {
     if (this._definitions.has(definition.name)) {
@@ -49,17 +54,24 @@ export class TargetRegistry {
           `Use a unique name or remove the existing registration first.`,
       );
     }
+    if (definition.mcpToolPattern && (definition.mcpToolPattern.global || definition.mcpToolPattern.sticky)) {
+      throw new Error(
+        `TargetRegistry: target "${definition.name}" registers an "mcpToolPattern" with a "g" or "y" flag. ` +
+          `The pattern must be non-global — remove the flag(s) so exec()/test() stays stateless.`,
+      );
+    }
     this._definitions.set(definition.name, definition);
   }
 
   /**
    * Retrieve a registered target definition by name.
    *
-   * Returns a shallow copy — mutating the returned object does not affect
-   * the registry's internal state.
+   * Returns a copy — mutating the returned object, including its
+   * `toolCapabilities` map and arrays, does not affect the registry's
+   * internal state. See `cloneDefinition()`.
    *
    * @param name      The target name to look up.
-   * @returns         A shallow copy of the matching TargetDefinition.
+   * @returns         A copy of the matching TargetDefinition.
    * @throws {Error}  If no target with the given name is registered.
    */
   get(name: string): TargetDefinition {
@@ -71,7 +83,7 @@ export class TargetRegistry {
           `Registered targets: ${known}.`,
       );
     }
-    return { ...def };
+    return cloneDefinition(def);
   }
 
   /**
@@ -93,11 +105,12 @@ export class TargetRegistry {
   /**
    * Returns all registered TargetDefinition objects, in registration order.
    *
-   * Returns shallow copies — mutating a returned definition does not affect
-   * the registry's internal state.
+   * Returns copies — mutating a returned definition, including its
+   * `toolCapabilities` map and arrays, does not affect the registry's
+   * internal state. See `cloneDefinition()`.
    */
   allDefinitions(): TargetDefinition[] {
-    return Array.from(this._definitions.values()).map(def => ({ ...def }));
+    return Array.from(this._definitions.values()).map(cloneDefinition);
   }
 
   /**
@@ -105,12 +118,44 @@ export class TargetRegistry {
    *
    * Useful for test isolation: clone the `defaultRegistry` to get an
    * independent copy that can be mutated without affecting the singleton.
+   * Each definition is deep-copied (see `cloneDefinition()`), so mutating a
+   * `toolCapabilities` array on the clone never leaks back to the original
+   * registry, or to any other clone.
    */
   clone(): TargetRegistry {
     const copy = new TargetRegistry();
     for (const def of this._definitions.values()) {
-      copy.register({ ...def });
+      copy.register(cloneDefinition(def));
     }
     return copy;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Deep-copy a `TargetDefinition`.
+ *
+ * A plain `{ ...def }` shallow spread would leave `toolCapabilities` (an
+ * object whose values are arrays) shared between the original and the copy —
+ * mutating a copy's array would silently mutate the original too, which
+ * defeats the test-isolation purpose `clone()` and `allDefinitions()` are
+ * documented to serve. `mcpToolPattern` is intentionally left shared: it is
+ * required to be non-global (enforced by `register()`), and a non-global
+ * `RegExp` carries no mutable `lastIndex` state, so sharing it is safe.
+ *
+ * @param def  The definition to copy.
+ * @returns    A new object; `toolCapabilities`, if present, is a fresh object
+ *             with fresh arrays.
+ */
+function cloneDefinition(def: TargetDefinition): TargetDefinition {
+  const copy: TargetDefinition = { ...def };
+  if (def.toolCapabilities) {
+    copy.toolCapabilities = Object.fromEntries(
+      Object.entries(def.toolCapabilities).map(([capability, tools]) => [capability, [...tools]]),
+    );
+  }
+  return copy;
 }

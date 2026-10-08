@@ -37,18 +37,24 @@
 │   │   ├── index.ts                # Barrel re-export
 │   │   ├── types.ts                # BuildConfig, BuildResult, BuildSummary types
 │   │   ├── frontmatter.ts          # Default frontmatter templates + resolution + rendering
-│   │   └── persona-builder.ts      # build(), buildSuite(), buildPersona() orchestrators
+│   │   ├── persona-builder.ts      # build(), buildSuite(), buildPersona() orchestrators
+│   │   ├── persona-files.ts        # Low-level persona file discovery/loading (discoverSuitePersonaYamls, loadRawYaml, loadPersonaYaml)
+│   │   └── persona-index.ts        # PersonaIndex pre-scan: resolvePersonaTargets(), scanPersonas(), agentNameMapFromIndex()
 │   │
 │   ├── targets/                    # Target registry and built-in target definitions
 │   │   ├── index.ts                # Barrel re-export
 │   │   ├── types.ts                # TargetDefinition interface + TARGET_* + DEFAULT_FRONTMATTER_* constants
 │   │   ├── registry.ts             # TargetRegistry class
-│   │   └── built-in.ts             # defaultRegistry singleton (vscode, claude-code, and deep-agents targets)
+│   │   ├── built-in.ts             # defaultRegistry singleton (vscode, claude-code, and deep-agents targets)
+│   │   └── tools.ts                # Tool-list/capability resolution: pickToolList, resolveTargetTools, resolveCapabilities, recognizedBy
 │   │
 │   ├── validators/                 # Validation functions
-│   │   ├── index.ts                # Barrel re-export
-│   │   ├── filename-validator.ts   # Kebab-case filename validation
-│   │   └── strict-validator.ts     # Required-marker presence validation
+│   │   ├── index.ts                        # Barrel re-export
+│   │   ├── filename-validator.ts           # Kebab-case filename validation
+│   │   ├── strict-validator.ts             # Required-marker presence validation
+│   │   ├── subagent-validator.ts           # validateSubagentRefs() — unknown-slug + target-aware "not built for target" checks
+│   │   ├── tool-requirements-validator.ts  # validateToolRequirements() — pure dispatch-grant + foreign-notation checks; ToolRequirement type, SUBAGENT_DISPATCH_REQUIREMENT constant
+│   │   └── tool-parity-validator.ts        # validateToolParity() — pure cross-target capability-parity check; TargetCapabilitySet, ToolParityFinding types
 │   │
 │   └── utils/                      # Shared utility functions
 │       ├── index.ts                # Barrel re-export
@@ -57,37 +63,50 @@
 │
 ├── tests/
 │   ├── README.md                   # Test suite documentation
-│   ├── engine/                     # Engine module tests (90 tests)
+│   ├── helpers/                    # Shared test utilities, not Vitest test files (createMinimalSuite() fixture factory)
+│   ├── engine/                     # Engine module tests
 │   │   ├── partials.test.ts
 │   │   ├── conditionals.test.ts
 │   │   ├── variables.test.ts
 │   │   ├── postProcessor.test.ts
 │   │   └── serializer.test.ts
-│   ├── loaders/                    # Loader tests (40 tests)
+│   ├── loaders/                    # Loader tests
 │   │   ├── partials-loader.test.ts
 │   │   ├── metadata-loader.test.ts
 │   │   └── content-loader.test.ts
-│   ├── plugins/                    # Plugin system tests (46 tests)
+│   ├── plugins/                    # Plugin system tests
 │   │   └── plugin-runner.test.ts   # runSuiteInit, runBuildContext, runPostRender, runValidate, runPartials, runPersonaPartials
-│   ├── targets/                    # Target registry tests (41 tests)
-│   │   └── target-registry.test.ts
-│   ├── builders/                   # Builder tests (125 tests)
+│   ├── targets/                    # Target registry tests
+│   │   ├── target-registry.test.ts
+│   │   └── target-tools.test.ts    # pickToolList/resolveTargetTools/resolveCapabilities/recognizedBy
+│   ├── builders/                   # Builder tests
 │   │   ├── agent-name-map.test.ts
 │   │   ├── build-config-variables-and-partials.test.ts
-│   │   ├── changelog-version.test.ts  # changelog-derived version + last_updated (12 tests)
+│   │   ├── build-success.test.ts       # success = errors === 0 && (!strict || warnings === 0)
+│   │   ├── changelog-version.test.ts   # changelog-derived version + last_updated
 │   │   ├── config-partials-and-on-partials.test.ts
 │   │   ├── config-suite-variables.test.ts
 │   │   ├── da-computed-fields.test.ts
 │   │   ├── on-persona-partials.test.ts
 │   │   ├── persona-builder.test.ts
 │   │   ├── persona-builder-edge-cases.test.ts
-│   │   └── target-variable-injection.test.ts
-│   ├── validators/                 # Validator tests (46 tests)
+│   │   ├── persona-index.test.ts       # scanPersonas()/agentNameMapFromIndex() cross-suite indexing
+│   │   ├── persona-targets.test.ts     # resolvePersonaTargets() rule cases
+│   │   ├── subagent-validation.test.ts # buildPersona()'s wired-in subagent slug validation
+│   │   ├── target-variable-injection.test.ts
+│   │   ├── template-whitespace-and-comments.test.ts  # stripComments() wiring at all three builder strip points
+│   │   ├── tool-parity.test.ts         # build()'s capability-parity post-pass — grouping/filtering integration cases
+│   │   ├── tool-requirements.test.ts   # validateToolRequirements() wiring into buildPersona()
+│   │   └── tools-block-fields.test.ts  # tools_block/cc_tools_block/da_tools_block derivation
+│   ├── validators/                 # Validator tests
 │   │   ├── filename-validator.test.ts
-│   │   └── strict-validator.test.ts
-│   ├── utils/                      # Utility tests (25 tests)
+│   │   ├── strict-validator.test.ts
+│   │   ├── subagent-validator.test.ts           # validateSubagentRefs() unknown-slug/target-aware cases
+│   │   ├── tool-requirements-validator.test.ts  # validateToolRequirements() dispatch-grant/foreign-notation cases
+│   │   └── tool-parity-validator.test.ts        # validateToolParity() pure cross-target parity cases
+│   ├── utils/                      # Utility tests
 │   │   └── changelog.test.ts       # resolveChangelogMeta() unit tests
-│   └── integration/                # End-to-end integration tests (20 tests)
+│   └── integration/                # End-to-end integration tests
 │       └── build.test.ts
 │
 ├── fixtures/                       # Test fixtures
@@ -108,11 +127,16 @@
     ├── getting-started.md          # Step-by-step tutorial with verified rendered output
     ├── metadata-reference.md       # All recognized YAML metadata fields by tier
     ├── api.md                      # Public exports reference
+    ├── building-skills.md          # Building SKILL.md files with a custom target registry
     ├── cli.md                      # CLI flags and config file format
     ├── configuration.md            # BuildConfig / SuiteConfig / BuildSummary reference
     ├── directory-convention.md     # Expected source layout
+    ├── dynamic-partials.md         # Build-time variables and partial injection (global/suite/persona)
+    ├── migrating-to-v3.md          # v3.0.0 upgrade guide — breaking changes and what to do
     ├── plugins.md                  # PersonaBuildPlugin interface and examples
-    ├── template-syntax.md          # Variables, partials, conditionals, built-in context vars
+    ├── releasing.md                # Maintainer release guide — changelog-first flow, checks, publishing
+    ├── target-differences.md       # VS Code vs Claude Code — tool notation, frontmatter, filenames
+    ├── template-syntax.md          # Variables, partials, conditionals, comments, built-in context vars
     └── agents/
         └── project-manifest/       # This manifest
 ```

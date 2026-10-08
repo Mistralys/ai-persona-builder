@@ -10,10 +10,10 @@ tests/
 │   └── suite-fixture.ts  – createMinimalSuite() factory for builder tests
 │
 ├── engine/           # Unit tests for the template engine
-│   ├── conditionals.test.ts   – {{#if}} / {{else}} / {{/if}} resolution
+│   ├── conditionals.test.ts   – {{#if}} / {{else}} / {{else if}} / {{/if}} resolution, standalone/inline whitespace handling
 │   ├── partials.test.ts       – {{> partialName}} inclusion
 │   ├── postProcessor.test.ts  – collapseBlankLines, ensureBlankLineBeforeHeadings, normalizeNewlines
-│   ├── serializers.test.ts    – serializeTools, serializeToolsList
+│   ├── serializer.test.ts     – serializeTools, serializeToolsList, serializeToolsBlock
 │   └── variables.test.ts      – {{variableName}} substitution and edge cases
 │
 ├── builders/         # Unit tests for the build orchestration layer
@@ -21,11 +21,20 @@ tests/
 │   ├── persona-builder-edge-cases.test.ts         – Edge cases: missing fields, empty suites, etc.
 │   ├── agent-name-map.test.ts                     – Cross-suite agent_<slug> variable injection
 │   ├── build-config-variables-and-partials.test.ts – BuildConfig.variables and BuildConfig.partials merge/override chain (AC-1–AC-6)
+│   ├── build-success.test.ts                      – build() success semantics: success = errors === 0 && (!strict || warnings === 0)
+│   ├── changelog-version.test.ts                  – changelog-derived version + last_updated
 │   ├── config-partials-and-on-partials.test.ts    – BuildConfig.partials and onPartials hook wiring
 │   ├── config-suite-variables.test.ts             – SuiteConfig.variables override wiring
 │   ├── da-computed-fields.test.ts                 – Deep Agents computed field derivation
 │   ├── on-persona-partials.test.ts                – onPersonaPartials hook isolation and chaining
-│   └── target-variable-injection.test.ts          – Target-flag variable injection (target_vscode, etc.)
+│   ├── persona-index.test.ts                      – scanPersonas() / agentNameMapFromIndex() cross-suite indexing
+│   ├── persona-targets.test.ts                    – resolvePersonaTargets() rule cases + per-persona target-skip integration
+│   ├── subagent-validation.test.ts                 – buildPersona()'s wired-in subagent slug validation
+│   ├── target-variable-injection.test.ts          – Target-flag variable injection (target_vscode, etc.)
+│   ├── template-whitespace-and-comments.test.ts   – stripComments() wiring at all three builder strip points (body template, partials map, frontmatter)
+│   ├── tool-parity.test.ts                        – build()'s capability-parity post-pass — grouping/filtering integration cases
+│   ├── tool-requirements.test.ts                  – validateToolRequirements() wiring into buildPersona() (dispatch-grant, config-rule triggers, built-in-id replacement, effectiveTools)
+│   └── tools-block-fields.test.ts                 – tools_block / cc_tools_block / da_tools_block context field derivation
 │
 ├── loaders/          # Unit tests for file-system loaders
 │   ├── content-loader.test.ts   – Markdown content template discovery
@@ -36,11 +45,15 @@ tests/
 │   └── plugin-runner.test.ts  – Hook execution order, context propagation, partials accumulation (runPartials, runPersonaPartials)
 │
 ├── targets/          # Unit tests for the target registry
-│   └── target-registry.test.ts  – TargetRegistry registration, lookup, and defaultRegistry built-ins
+│   ├── target-registry.test.ts  – TargetRegistry registration, lookup, and defaultRegistry built-ins
+│   └── target-tools.test.ts     – pickToolList / resolveTargetTools / resolveCapabilities / recognizedBy
 │
 ├── validators/       # Unit tests for built-in validators
-│   ├── filename-validator.test.ts  – vs_file_name / cc_file_name checks
-│   └── strict-validator.test.ts    – Unresolved {{marker}} detection
+│   ├── filename-validator.test.ts          – vs_file_name / cc_file_name checks
+│   ├── strict-validator.test.ts            – Unresolved {{marker}} detection
+│   ├── subagent-validator.test.ts          – validateSubagentRefs() unknown-slug + target-aware "not built for target" cases
+│   ├── tool-parity-validator.test.ts       – validateToolParity() pure cross-target parity cases
+│   └── tool-requirements-validator.test.ts – validateToolRequirements() dispatch-grant/foreign-notation cases
 │
 └── integration/      # End-to-end tests against the fixtures/ directory
     └── build.test.ts  – Full build() pipeline: output files written, content matches, plugin hooks invoked

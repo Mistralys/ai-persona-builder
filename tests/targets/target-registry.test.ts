@@ -10,6 +10,10 @@
  *   - get() for unknown name throws descriptive error listing known targets (AC-4)
  *   - Smoke import: all expected symbols are exported from the package entry point (AC-5)
  *   - DEFAULT_FRONTMATTER_CLAUDE_CODE field structure assertions
+ *   - register() rejects a global/sticky `mcpToolPattern` (WP-003 AC)
+ *   - clone()/allDefinitions()/get() deep-copy `toolCapabilities` (WP-003 AC)
+ *   - Built-in vscode/claude-code capability maps + mcpToolPattern;
+ *     deep-agents toolsContextKey-only (WP-003 AC)
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -171,13 +175,80 @@ describe('TargetRegistry', () => {
       expect(cloned.has('delta')).toBe(false);
     });
 
-    it('cloned definitions are shallow copies (not references)', () => {
+    it('cloned definitions are copies (not references)', () => {
       const original = makeTarget('alpha');
       registry.register(original);
       const cloned = registry.clone();
       const clonedDef = cloned.get('alpha');
       expect(clonedDef).toEqual(original);
       expect(clonedDef).not.toBe(original);
+    });
+
+    it('deep-copies toolCapabilities — mutating a cloned array leaves the original registry unchanged', () => {
+      registry.register({
+        ...makeTarget('alpha'),
+        toolCapabilities: { read: ['Read'] },
+      });
+      const cloned = registry.clone();
+      cloned.get('alpha').toolCapabilities!.read.push('MutatedTool');
+      expect(registry.get('alpha').toolCapabilities!.read).toEqual(['Read']);
+    });
+  });
+
+  // toolCapabilities deep-copy — get() / allDefinitions()
+  describe('toolCapabilities deep-copy', () => {
+    it('get() returns a definition whose toolCapabilities array is independent of the registry', () => {
+      registry.register({
+        ...makeTarget('alpha'),
+        toolCapabilities: { read: ['Read'] },
+      });
+      const first = registry.get('alpha');
+      first.toolCapabilities!.read.push('MutatedTool');
+      const second = registry.get('alpha');
+      expect(second.toolCapabilities!.read).toEqual(['Read']);
+    });
+
+    it('allDefinitions() returns definitions whose toolCapabilities arrays are independent of the registry', () => {
+      registry.register({
+        ...makeTarget('alpha'),
+        toolCapabilities: { read: ['Read'] },
+      });
+      const [returned] = registry.allDefinitions();
+      returned.toolCapabilities!.read.push('MutatedTool');
+      expect(registry.get('alpha').toolCapabilities!.read).toEqual(['Read']);
+    });
+
+    it('a custom target registered without the new fields still registers and is retrievable', () => {
+      const def = makeTarget('legacy-style');
+      expect(() => registry.register(def)).not.toThrow();
+      expect(registry.get('legacy-style')).toEqual(def);
+    });
+  });
+
+  // register() — mcpToolPattern flag rejection
+  describe('register() — mcpToolPattern flag validation', () => {
+    it('throws when mcpToolPattern carries the global flag', () => {
+      expect(() =>
+        registry.register({ ...makeTarget('bad-g'), mcpToolPattern: /^mcp__(\w+)/g }),
+      ).toThrow(/non-global|"g"|"y"/i);
+    });
+
+    it('throws when mcpToolPattern carries the sticky flag', () => {
+      expect(() =>
+        registry.register({ ...makeTarget('bad-y'), mcpToolPattern: /^mcp__(\w+)/y }),
+      ).toThrow(/non-global|"g"|"y"/i);
+    });
+
+    it('error message names the offending target', () => {
+      expect(() =>
+        registry.register({ ...makeTarget('bad-target'), mcpToolPattern: /^mcp__(\w+)/g }),
+      ).toThrowError(/bad-target/);
+    });
+
+    it('registers successfully when mcpToolPattern has no global/sticky flag', () => {
+      expect(() =>
+        registry.register({ ...makeTarget('good'), mcpToolPattern: /^mcp__(\w+)/ }),
+      ).not.toThrow();
     });
   });
 });
@@ -259,6 +330,61 @@ describe('defaultRegistry', () => {
 
   it('deep-agents target has defaultEnabled = false', () => {
     expect(defaultRegistry.get(TARGET_DEEP_AGENTS).defaultEnabled).toBe(false);
+  });
+
+  // WP-003: tool capability metadata
+  it('vscode target declares toolsContextKey "tools"', () => {
+    expect(defaultRegistry.get(TARGET_VSCODE).toolsContextKey).toBe('tools');
+  });
+
+  it('vscode target declares the full capability map', () => {
+    expect(defaultRegistry.get(TARGET_VSCODE).toolCapabilities).toEqual({
+      execute: ['execute'],
+      read: ['read'],
+      edit: ['edit'],
+      search: ['search'],
+      web: ['web'],
+      dispatch: ['agent'],
+      todo: ['todo'],
+    });
+  });
+
+  it('vscode target declares a non-global mcpToolPattern matching server/*', () => {
+    const pattern = defaultRegistry.get(TARGET_VSCODE).mcpToolPattern!;
+    expect(pattern.global).toBe(false);
+    expect(pattern.sticky).toBe(false);
+    expect('my-server/some-tool'.match(pattern)?.[1]).toBe('my-server');
+  });
+
+  it('claude-code target declares toolsContextKey "cc_tools"', () => {
+    expect(defaultRegistry.get(TARGET_CLAUDE_CODE).toolsContextKey).toBe('cc_tools');
+  });
+
+  it('claude-code target declares the full capability map', () => {
+    expect(defaultRegistry.get(TARGET_CLAUDE_CODE).toolCapabilities).toEqual({
+      execute: ['Bash'],
+      read: ['Read'],
+      edit: ['Edit', 'Write'],
+      search: ['Grep', 'Glob'],
+      web: ['WebFetch', 'WebSearch'],
+      dispatch: ['Task', 'Agent'],
+      todo: ['TodoWrite', 'TodoRead'],
+    });
+  });
+
+  it('claude-code target declares a non-global mcpToolPattern matching mcp__server and mcp__server__tool', () => {
+    const pattern = defaultRegistry.get(TARGET_CLAUDE_CODE).mcpToolPattern!;
+    expect(pattern.global).toBe(false);
+    expect(pattern.sticky).toBe(false);
+    expect('mcp__my_server'.match(pattern)?.[1]).toBe('my_server');
+    expect('mcp__my_server__some_tool'.match(pattern)?.[1]).toBe('my_server');
+  });
+
+  it('deep-agents target declares toolsContextKey "da_tools" and no capability map', () => {
+    const def = defaultRegistry.get(TARGET_DEEP_AGENTS);
+    expect(def.toolsContextKey).toBe('da_tools');
+    expect(def.toolCapabilities).toBeUndefined();
+    expect(def.mcpToolPattern).toBeUndefined();
   });
 });
 
