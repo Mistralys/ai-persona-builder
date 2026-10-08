@@ -134,6 +134,7 @@
     ├── dynamic-partials.md         # Build-time variables and partial injection (global/suite/persona)
     ├── migrating-to-v3.md          # v3.0.0 upgrade guide — breaking changes and what to do
     ├── plugins.md                  # PersonaBuildPlugin interface and examples
+    ├── releasing.md                # Maintainer release guide — changelog-first flow, checks, publishing
     ├── target-differences.md       # VS Code vs Claude Code — tool notation, frontmatter, filenames
     ├── template-syntax.md          # Variables, partials, conditionals, comments, built-in context vars
     └── agents/

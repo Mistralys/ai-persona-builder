@@ -89,6 +89,7 @@ npx persona-build --check --strict
 | [Configuration Reference](docs/configuration.md) | `BuildConfig`, `SuiteConfig`, and `BuildSummary` fields |
 | [CLI Reference](docs/cli.md) | Command-line flags, config file format, and common patterns |
 | [Public API](docs/api.md) | All exported types and functions |
+| [Releasing](docs/releasing.md) | Maintainer guide — changelog-first flow, pre-release checks, tagging and publishing |
 
 ## 📄 License
 
