@@ -23,6 +23,7 @@ more predictably, including on Windows line endings.
 - Targets: Target definitions can now declare their tool capabilities.
 - Engine: Added reporting of which partials a template references.
 - Docs: Documented the conditional whitespace rules.
+- Docs: All documentation is now bundled in the NPM package to keep it available.
 
 ### Breaking Changes
 
@@ -30,9 +31,6 @@ Error-severity validation results, including unknown sub-agent names, now fail e
 instead of only strict builds. Fix the reported errors, or check your CI for builds that
 passed with errors before. `--strict` still also fails on warnings. See the
 [migration guide](docs/migrating-to-v3.md).
-
-## v2.6.1 - Bundle Documentation
-- Docs: All documentation is now bundled in the NPM package to keep it available.
 
 ## v2.6.0 - Changelog-Derived Versioning
 - Builder: `version` and `last_updated` now derived from the YAML `changelog` block scalar.
