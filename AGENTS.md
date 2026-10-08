@@ -141,6 +141,7 @@ Unclear → Pause and request user clarification
 | `npm test` | Run all tests once. |
 | `npm run test:watch` | Run tests in watch mode. |
 | `npm run typecheck` | Type-check without emitting (`tsc --noEmit`). |
+| `prepublishOnly` | Runs `npm run build` automatically before `npm publish`, so the published `dist/` is never stale. |
 
 ---
 

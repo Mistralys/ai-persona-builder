@@ -82,6 +82,8 @@ git push && git push origin v<version>
 
 Then create the GitHub release from the `v<version>` tag.
 
+A `prepublishOnly` script runs `npm run build` automatically before `npm publish`, so the published `dist/` always matches the source at publish time.
+
 `npm version` updates `package.json`, creates a commit, and creates the `v<version>` Git tag. Push that one tag by name rather than `--tags`, so a stray local tag is not published with it. The `files` field in `package.json` limits the published package to `dist/` and `docs/`.
 
 ## If something goes wrong
