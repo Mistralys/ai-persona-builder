@@ -1,71 +1,35 @@
 # Changelog
 
-All notable changes to @mistralys/persona-builder will be documented in this file.
+## v3.0.0 - Persona Targets & Tool Validation (Breaking-S)
 
-## v3.0.0 - Persona Targets & Tool Validation (proposed)
-> The version number is a proposal only — the final release version is set by the maintainer at
-> publish time.
-> Migration: see [docs/migrating-to-v3.md](docs/migrating-to-v3.md) for the full upgrade guide.
-- **Breaking:** Error-severity validation results now fail every build (and the CLI exits `1`)
-  with or without `--strict` — previously only `strict` mode failed on them. This includes the
-  unknown-sub-agent-slug error, which was silently ignored outside `strict` mode until now.
-  `--strict` continues to additionally fail on warning-severity results.
-- Builder: Personas can declare `targets: [...]` in YAML to build for a subset of registered
-  targets; excluded persona × target pairs are skipped entirely (no render, no write) and recorded
-  in `BuildSummary.skipped`.
-- Builder: A new cross-suite persona pre-scan (`scanPersonas()` / `PersonaIndex`) replaces the
-  former name-map-only scan; it resolves each persona's `targets` and `tool_parity_exceptions`
-  once, feeding both the target-skip logic and the agent name map.
-- Validators: `validateSubagentRefs()` (relocated to `src/validators/subagent-validator.ts` and
-  exported) additionally flags a sub-agent slug that exists but isn't built for the target
-  currently being built.
-- Validators: Added `validateToolRequirements()` — a persona that declares `subagents` (or
-  triggers a `BuildConfig.toolRequirements` rule) must grant a `dispatch`-capability tool on every
-  mapped target it builds for; a tool spelled in another target's notation now raises a warning.
-- Validators: Added `validateToolParity()` — a persona built for two or more mapped targets must
-  grant the same capabilities (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`,
-  `mcp:<server>`) on each, except capabilities listed in the persona's `tool_parity_exceptions`.
-- Targets: `TargetDefinition` gained `toolsContextKey`, `toolCapabilities`, and `mcpToolPattern` —
-  the shared capability vocabulary driving all three checks above and `buildContext()`'s
-  `cc_tools`/`da_tools` fallback. `TargetRegistry.register()` now rejects an `mcpToolPattern`
-  carrying the `g` or `y` flag.
-- Builder: `BuildResult` gained `effectiveTools`; `BuildSummary` gained `skipped`, `issues`,
-  `errors`, and `warnings`.
-- Engine: Added `collectPartialReferences()`, a pure zero-import function reporting which partials
-  a template transitively references (mirrors `resolvePartials()`'s depth-2 cap).
-- **Fix:** `resolveConditionals()` no longer swallows the blank lines surrounding a
-  `{{#if}}…{{/if}}` block — a removed block between two paragraphs now leaves exactly one
-  paragraph break instead of joining them, and blank lines inside a kept branch are preserved
-  as written. An inline conditional tag (e.g. `` Use the {{#if a}}Task{{else}}task{{/if}} tool. ``)
-  now removes only the tag, without inserting a line break. `{{else if}}` chains are resolved
-  natively by a single-pass tokenizer instead of being pre-processed into nested `{{#if}}`
-  blocks.
-- **Fix:** `mergeMarkers()` now resolves a whole cluster of adjacent vanished blocks or
-  standalone comments — separated only by whitespace-only lines, including no gap at all — in a
-  single replacement, instead of merging each one against its immediate neighbour and leaving
-  the runs between them to add up. Two or more emits-nothing `{{#if}}` blocks (or standalone
-  comments) next to each other now leave exactly one paragraph break, the same guarantee a
-  single vanished block already had. A kept block's content still breaks the merge.
-- **Fix:** `resolveConditionals()` and `stripComments()` now normalise CRLF and lone-CR line
-  endings to LF before resolving any tag, so a CRLF template — a partial, a frontmatter
-  template, or direct API input, including a template checked out on Windows with
-  `core.autocrlf=true` — renders identically to its LF twin instead of treating every
-  standalone tag as inline. Both functions' output is now unconditionally LF-only.
-- Engine: Added template comments (`{{!-- … --}}`, `{{! … }}`) via `stripComments()`, applied
-  before partials, frontmatter and tool-requirement scans — a commented-out `{{> partial}}` or
-  `{{variable}}` neither expands nor warns, and shares the conditional tags' standalone/inline
-  whitespace contract.
-- Builder: `stripComments()` is wired into every template a persona build renders — the loaded
-  body template, the final per-persona partials map (covering config-, shared-, suite-, and
-  plugin-injected partials alike), and the frontmatter template — so a comment is inert before
-  partials expand, before the raw-template tool-requirement scan runs, and before frontmatter
-  conditionals resolve.
-- CLI: Prints every error and warning grouped by suite/target/persona, plus index-level issues,
-  the skipped-persona count, and error/warning totals.
-- Tests: Added coverage for the persona index, target resolution, tool requirements, tool parity,
-  and build success semantics.
-- Docs: Documented conditional whitespace rules (standalone vs. inline tags, blank-run merging,
-  malformed-tag pass-through) in `docs/template-syntax.md` and the API surface manifest.
+**Validation errors now fail every build, not only strict ones.**
+Personas can now choose which targets they build for. New checks catch missing sub-agent
+tools and tool differences between targets. Template conditionals and comments also render
+more predictably, including on Windows line endings.
+
+- Validation: Error-severity results now fail every build and exit the CLI with code 1.
+- Validation: Unknown sub-agent names now fail builds outside strict mode.
+- Targets: Personas can limit the targets they build for; excluded combinations are skipped.
+- Validation: Personas with sub-agents must now grant a dispatch tool on every target.
+- Validation: Added tool parity check across targets, with per-persona exceptions.
+- Validation: Sub-agents not built for the current target are now flagged.
+- Templates: Added comments that are ignored before partials and variables are resolved.
+- Templates: Fixed conditional blocks swallowing the blank lines around them.
+- Templates: Fixed inline conditionals inserting stray line breaks.
+- Templates: Fixed adjacent removed blocks leaving extra blank lines.
+- Templates: Fixed Windows (CRLF) templates rendering differently from Unix ones.
+- CLI: Output now lists all errors and warnings by suite, target and persona, with totals.
+- Builder: Build results now report effective tools, skipped personas, errors and warnings.
+- Targets: Target definitions can now declare their tool capabilities.
+- Engine: Added reporting of which partials a template references.
+- Docs: Documented the conditional whitespace rules.
+
+### Breaking Changes
+
+Error-severity validation results, including unknown sub-agent names, now fail every build
+instead of only strict builds. Fix the reported errors, or check your CI for builds that
+passed with errors before. `--strict` still also fails on warnings. See the
+[migration guide](docs/migrating-to-v3.md).
 
 ## v2.6.1 - Bundle Documentation
 - Docs: All documentation is now bundled in the NPM package to keep it available.
