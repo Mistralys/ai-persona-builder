@@ -1,23 +1,27 @@
 # AI Persona Builder
 
-Build AI persona instruction files for **VS Code Chat**, **Claude Code** and **LangGraph Deep Agents** from YAML metadata and Markdown templates — with zero configuration friction.
+[npm](https://www.npmjs.com/package/@mistralys/persona-builder) · [GitHub](https://github.com/Mistralys/ai-persona-builder)
 
-Define your personas once as simple YAML + Markdown sources, and the library generates correctly formatted instruction files for both IDEs. A plugin system lets you inject custom frontmatter, run validators, or post-process output without touching the core engine.
+## Build AI personas once, deploy everywhere
 
-## ✨ Features
+Define your AI agent personas as simple YAML metadata + Markdown templates, and let the builder generate correctly formatted instruction files for **VS Code Chat**, **Claude Code**, and **LangGraph Deep Agents** — all from a single source. A plugin system lets you inject custom frontmatter, run validators, or post-process output without touching the core engine.
+
+## Features
 
 - **Multi-target output** — generates VS Code `.agent.md`, Claude Code `.md`, Deep Agents `.md`, and any custom format from a single source
-- **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, and context flags
-- **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, and `{{#if}}` conditionals
+- **Per-persona targets** — a persona YAML can list the subset of registered targets it builds for (`targets: [...]`); the builder skips the rest entirely — no wasted renders or writes, and no cleanup step needed in your build script
+- **Cross-target tool validation** — a rough capability map (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`, `mcp:<server>`) drives three build-time checks: a dispatching persona must grant dispatch on every target it builds for, a persona built for several targets must grant the same capabilities on each (with per-persona `tool_parity_exceptions`), and a tool spelled in another target's notation raises a warning
+- **Extensible target registry** — register custom targets via `TargetRegistry` without touching core code; each target declares its own output key, frontmatter template, context flags, and tool-capability map
+- **YAML + Markdown templating** — separate metadata from content; merge them at build time with `{{variables}}`, `{{> partials}}`, `{{#if}}` conditionals, and `{{!-- comments --}}`
 - **Shared + per-suite partials** — reuse content fragments across personas with local overrides
 - **Custom variables** — inject global or per-suite template variables via `BuildConfig.variables` and `SuiteConfig.variables` without touching persona YAML files
-- **Dynamic partials** — supply inline partials via `BuildConfig.partials`, or override them at suite or per-persona level through the `onPartials` and `onPersonaPartials` plugin hooks
+- **Dynamic partials** — supply inline partials via `BuildConfig.partials`, or override them at suite or per-persona level through plugin hooks
 - **Plugin architecture** — hook into context building, post-rendering, validation, and frontmatter generation
-- **CI-friendly** — `--check` mode renders without writing; `--strict` exits non-zero on warnings
+- **CI-friendly** — any error-severity validation result fails the build and exits non-zero by default (no flag needed); `--check` mode renders without writing; `--strict` additionally exits non-zero on warnings
 - **Programmatic & CLI** — use the `build()` API in scripts or run `persona-build` from the command line
-- **Single dependency** — only `js-yaml` at runtime
+- **Single runtime dependency** — only `js-yaml`
 
-## 📋 Requirements
+## Requirements
 
 - **Node.js** ≥ 18
 
@@ -62,22 +66,22 @@ npx persona-build
 npx persona-build --check --strict
 ```
 
-See the [CLI docs](docs/cli.md) for config file format and all flags.
+## 📖 Learn More
 
-## 📖 Documentation
-
-**Guides** — conceptual and procedural reading:
+**Guides:**
 
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](docs/getting-started.md) | Step-by-step tutorial — build your first persona from scratch |
 | [Directory Convention](docs/directory-convention.md) | Expected source layout (`meta/`, `content/`, `partials/`) |
-| [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, and built-in context variables |
-| [Target Differences](docs/target-differences.md) | VS Code vs Claude Code — tool notation, frontmatter, filename conventions, and common mistakes |
+| [Template Syntax](docs/template-syntax.md) | Variables, partials, conditionals, comments, and built-in context variables |
+| [Target Differences](docs/target-differences.md) | VS Code vs Claude Code — tool notation, frontmatter, filename conventions |
 | [Custom Variables & Dynamic Partials](docs/dynamic-partials.md) | Inject build-time variables and partial content at global, suite, or per-persona level |
-| [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface and examples |
+| [Building Skills](docs/building-skills.md) | Building `SKILL.md` files with a custom target registry |
+| [Plugins](docs/plugins.md) | `PersonaBuildPlugin` interface, hooks, and examples |
+| [Migrating to v3.0.0](docs/migrating-to-v3.md) | Upgrade guide — breaking changes, new validation checks, and what to do about them |
 
-**Reference** — look-up material:
+**Reference:**
 
 | Reference | Description |
 |-----------|-------------|
@@ -85,33 +89,8 @@ See the [CLI docs](docs/cli.md) for config file format and all flags.
 | [Configuration Reference](docs/configuration.md) | `BuildConfig`, `SuiteConfig`, and `BuildSummary` fields |
 | [CLI Reference](docs/cli.md) | Command-line flags, config file format, and common patterns |
 | [Public API](docs/api.md) | All exported types and functions |
-| [Project Manifest](docs/agents/project-manifest/README.md) | Canonical documentation for AI agent sessions |
-
-## 🔌 Plugins
-
-The library ships with a plugin system that lets you inject custom frontmatter, run validators, or
-post-process output without touching the core engine. See [docs/plugins.md](docs/plugins.md) for
-the `PersonaBuildPlugin` interface, examples, and the available hooks.
-
-> **Ledger plugin:** The first-party ledger plugin was migrated out of this library in v2.0.0 and
-> is now maintained in the [ai-insights](https://github.com/mistralys/ai-insights-dev) workspace.
-> The `@mistralys/persona-builder/plugins/ledger` sub-path export no longer exists.
-
----
+| [Releasing](docs/releasing.md) | Maintainer guide — changelog-first flow, pre-release checks, tagging and publishing |
 
 ## 📄 License
 
 MIT
-
----
-
-## Release Workflow
-
-1. Add changelog entries (do not change package.json version)
-2. Commit all changes.
-3. `npm run build`.
-4. `npm login` if necessary.
-5. `npm version 0.0.0` - Updates package and lock versions + commit.
-6. `npm publish` - Publish on NPM.
-7. `git push origin v0.0.0` - Add the tag in GIT (note the `v`).
-8. Add the release on Github

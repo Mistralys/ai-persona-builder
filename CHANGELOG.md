@@ -1,6 +1,36 @@
-﻿# Changelog
+# Changelog
 
-All notable changes to @mistralys/persona-builder will be documented in this file.
+## v3.0.0 - Persona Targets & Tool Validation (Breaking-S)
+
+**Validation errors now fail every build, not only strict ones.**
+Personas can now choose which targets they build for. New checks catch missing sub-agent
+tools and tool differences between targets. Template conditionals and comments also render
+more predictably, including on Windows line endings.
+
+- Validation: Error-severity results now fail every build and exit the CLI with code 1.
+- Validation: Unknown sub-agent names now fail builds outside strict mode.
+- Targets: Personas can limit the targets they build for; excluded combinations are skipped.
+- Validation: Personas with sub-agents must now grant a dispatch tool on every target.
+- Validation: Added tool parity check across targets, with per-persona exceptions.
+- Validation: Sub-agents not built for the current target are now flagged.
+- Templates: Added comments that are ignored before partials and variables are resolved.
+- Templates: Fixed conditional blocks swallowing the blank lines around them.
+- Templates: Fixed inline conditionals inserting stray line breaks.
+- Templates: Fixed adjacent removed blocks leaving extra blank lines.
+- Templates: Fixed Windows (CRLF) templates rendering differently from Unix ones.
+- CLI: Output now lists all errors and warnings by suite, target and persona, with totals.
+- Builder: Build results now report effective tools, skipped personas, errors and warnings.
+- Targets: Target definitions can now declare their tool capabilities.
+- Engine: Added reporting of which partials a template references.
+- Docs: Documented the conditional whitespace rules.
+- Docs: All documentation is now bundled in the NPM package to keep it available.
+
+### Breaking Changes
+
+Error-severity validation results, including unknown sub-agent names, now fail every build
+instead of only strict builds. Fix the reported errors, or check your CI for builds that
+passed with errors before. `--strict` still also fails on warnings. See the
+[migration guide](docs/migrating-to-v3.md).
 
 ## v2.6.0 - Changelog-Derived Versioning
 - Builder: `version` and `last_updated` now derived from the YAML `changelog` block scalar.

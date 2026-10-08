@@ -5,6 +5,8 @@ description: 'Pre-release readiness check for the @mistralys/persona-builder pac
 
 # Release Check
 
+For the full release flow and rationale, see [`docs/releasing.md`](../../../docs/releasing.md).
+
 Validates that the package is ready for release via `npm version {VERSION}`. Run all steps in order and report the result of each check before continuing to the next.
 
 ---
@@ -37,9 +39,9 @@ Extract the topmost version from `CHANGELOG.md` (the first line matching `## vX.
 git tag --sort=-v:refname | head -5
 ```
 
-Confirm that the changelog top version does **not** already have a corresponding Git tag (e.g., if changelog says `v2.4.0`, there must be no `v2.4.0` tag). A matching tag means this version has already been released.
+Confirm that the changelog top version does **not** already have a corresponding Git tag in **either** form: with the `v` prefix (`v2.4.0`, the form `npm version` creates) or without (`2.4.0`, a hand-made tag that would collide with the release). Releases are never tagged by hand. A matching tag means this version has already been released.
 
-**Pass:** No Git tag exists for the changelog top version.  
+**Pass:** Neither `X.Y.Z` nor `vX.Y.Z` exists for the changelog top version.  
 **Fail:** Matching tag found — changelog entry is a re-release of an already-tagged version.
 
 ---
@@ -74,22 +76,6 @@ tsup must produce the `dist/` output without errors. This confirms the package i
 
 ---
 
-### 5a. Plugin artefacts freshness check
-
-After the build completes, check whether any files under `plugins/` were modified:
-
-```bash
-git diff --name-only plugins/
-git status --short plugins/
-```
-
-The `plugins/` directory contains committed build artefacts (publishable plugin outputs). If the build regenerated them, they are stale and must be committed before the release.
-
-**Pass:** No modified or untracked files under `plugins/`.  
-**Fail:** One or more files under `plugins/` differ from HEAD — commit them and restart the check from step 5.
-
----
-
 ### 6. Git working tree
 
 ```bash
@@ -97,7 +83,7 @@ git status --short
 git diff --name-only
 ```
 
-The working tree must be **clean** before running `npm version`. Commit or stash any uncommitted changes first.
+Run this after the build. The working tree must be **clean** before running `npm version`; the build must not leave tracked files modified (`dist/` is gitignored). Commit or stash any uncommitted changes first.
 
 ---
 
@@ -106,14 +92,13 @@ The working tree must be **clean** before running `npm version`. Commit or stash
 | Check | Expected result |
 |-------|-----------------|
 | Changelog version ahead | CHANGELOG.md version > `package.json` version (semver) |
-| Git tag gap | No existing tag for the changelog top version |
+| Git tag gap | No `X.Y.Z` or `vX.Y.Z` tag for the changelog top version |
 | TypeScript type check | Exit 0, no errors |
 | Test suite | All tests pass, exit 0 |
 | Build | `dist/` produced without errors, exit 0 |
-| Plugin artefacts freshness | No modified/untracked files under `plugins/` after build |
 | Git working tree | No uncommitted changes |
 
-All 7 checks must pass before proceeding.
+All checks must pass before proceeding.
 
 ---
 
@@ -126,8 +111,8 @@ npm version <version>   # e.g. npm version 2.4.0
 npm publish
 ```
 
-`npm version` automatically bumps `package.json`, creates a commit, and creates the Git tag. Push the commit and tag afterward:
+`npm version` automatically bumps `package.json`, creates a commit, and creates the Git tag. Push the commit and the tag afterward, then create the GitHub release from that tag:
 
 ```bash
-git push && git push --tags
+git push && git push origin v<version>
 ```

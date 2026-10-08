@@ -46,8 +46,8 @@ true` is set.
 
 | Field | Type | Template variable | Description |
 |-------|------|-------------------|-------------|
-| `cc_model` | `string` | `{{cc_model}}` | Claude Code model identifier (e.g. `claude-sonnet-4-5`) |
-| `cc_memory` | `string \| boolean` | `{{cc_memory}}` | Claude Code memory setting (e.g. `project`, `false`) |
+| `cc_model` | `string` | `{{cc_model}}` | Claude Code model identifier — `sonnet`, `opus`, `haiku`, `fable`, a full model ID (e.g. `claude-sonnet-4-5`), or `inherit` |
+| `cc_memory` | `string \| boolean` | `{{cc_memory}}` | Claude Code memory setting — `user`, `project`, `local`, or `false` |
 
 These fields are **not auto-derived** by `buildContext()`. They pass through from YAML to the
 template context unchanged. If you override the default Claude Code frontmatter template via a
@@ -68,6 +68,103 @@ references them.
 | Field | Type | Fallback | Description |
 |-------|------|----------|-----------|
 | `da_tools` | `string[]` | Falls back to `tools` | Separate tool list for the Deep Agents target. Only consumed when `da_file_name` is also set. Exposed as `{{da_tools_list}}`, `{{da_tools_json}}`, and `{{da_tools_block}}` in the template context. |
+
+---
+
+## Tier 4c — Sub-Agent Declarations
+
+| Field | Type | Required? | Description |
+|-------|------|-----------|-------------|
+| `subagents` | `string[]` | Optional | Slugs of other personas this persona may delegate work to as sub-agents. Each slug must match a persona discoverable across all configured suites. |
+
+The `subagents` field declares cross-suite delegation relationships. At build time,
+`validateSubagentRefs()` checks every declared slug against the cross-suite agent map built by
+`agentNameMapFromIndex()` (derived from the `scanPersonas()` pre-scan) during the pre-scan phase.
+An `error`-severity `ValidationResult` is emitted for each slug that has no corresponding persona
+in any configured suite. When a `PersonaIndex` is available (the case for `buildSuite()`/`build()`
+callers), a second, independent check flags a slug that resolves to a real persona whose resolved
+`targets` exclude the target currently being built — e.g. a persona built for `claude-code` naming
+a sub-agent that is only built for `vscode`.
+
+> **Dispatch-grant requirement.** Declaring `subagents` also triggers the built-in
+> `SUBAGENT_DISPATCH_REQUIREMENT` tool-requirement check: this persona must grant a
+> `dispatch`-capability tool (`agent` on VS Code; `Task` or `Agent` on Claude Code) on every
+> mapped target it is built for, or the build gets an `error`-severity "ungranted dispatch"
+> finding on that target — independent of whether the `subagents` slugs themselves resolve. See
+> [Target Differences — Capability Correspondence](target-differences.md#capability-correspondence--cross-target-validation)
+> and [API Reference — Dispatch-grant and foreign-notation validation](api.md#dispatch-grant-and-foreign-notation-validation).
+
+**YAML example:**
+
+```yaml
+name: Project Manager
+slug: project-manager
+subagents:
+  - wp-decomposer
+  - dependency-sequencer
+  - pipeline-configurator
+```
+
+**How slug resolution works:**
+
+1. Every persona across all configured suites contributes its `slug` (or filename stem) to a
+   global agent map during the pre-scan phase.
+2. For each slug in `subagents`, the validator looks up the key `agent_slug_{slug}` (with
+   hyphens replaced by underscores) in the map.
+3. If the key is missing, the slug is reported as unresolved.
+
+**Build failure:** Unresolved subagent slugs are reported as an error-severity `ValidationResult`
+in `BuildResult.validationResults`, which fails the build (`BuildSummary.success = false`, CLI
+exit 1) by default — with or without `strict: true`. `strict: true` additionally throws (after
+all suites have built) rather than just returning a failed summary; see
+[Configuration Reference — BuildSummary](configuration.md#buildsummary) and
+[Configuration Reference — `strict`](configuration.md#buildconfig).
+
+**Template access:** The raw `subagents` array is available in the template context via
+`{{subagents}}`, but its primary purpose is validation — not template rendering. To reference
+another persona's display name or slug in template prose, use the cross-suite agent variables
+`{{agent_<slug>}}` and `{{agent_slug_<slug>}}` (see [Auto-Derived Context
+Variables](#auto-derived-context-variables)).
+
+> **Absence is valid:** Personas that omit `subagents` (or declare an empty list) pass
+> validation silently.
+
+---
+
+## Tier 4d — Per-Target Persona Selection
+
+| Field | Type | Required? | Description |
+|-------|------|-----------|-------------|
+| `targets` | `string[]` | Optional | Target names this persona builds for. Absent → every registered target. A declared subset → only those targets. An unknown target name, a non-string entry, or an empty array each produce an `error`-severity `ValidationResult` (the offending entry is dropped rather than failing the whole field). Duplicate entries are silently removed. |
+| `tool_parity_exceptions` | `string[]` | Optional | Capability names exempted from the cross-target tool-parity check for this persona. Defaults to `[]` when absent. |
+
+Both fields are read and resolved by `scanPersonas()` during the pre-scan phase
+(`src/builders/persona-index.ts`), which populates a `PersonaIndex` entry per persona with the
+resolved `targets` list, the raw `declaredTargets` value, and `toolParityExceptions`.
+
+> **Fully enforced.** `targets` is fully enforced: `scanPersonas()` resolves it for every persona,
+> and `buildSuite()` / `build()` skip rendering (and writing) a persona for each excluded target,
+> recording the skip in `BuildSummary.skipped`. A direct `buildPersona()` call is unaffected by
+> `targets` — it always builds the exact persona × target it's given. The cross-target tool-parity
+> check is enforced too: after all suites × targets have built, `build()` runs a post-pass
+> (`validateToolParity()`, see [API Reference — Cross-target tool-parity
+> validation](api.md#cross-target-tool-parity-validation)) that compares each persona's granted
+> capabilities across its built targets and appends an error-severity `ValidationResult` to each
+> lacking target's `BuildResult.validationResults` for every mismatched capability not listed in
+> `tool_parity_exceptions`. An unrecognized name in `tool_parity_exceptions` is flagged as a
+> warning-severity issue by `scanPersonas()`, not silently ignored.
+
+**YAML example:**
+
+```yaml
+name: Docs-Only Agent
+slug: docs-only-agent
+targets:
+  - claude-code
+tool_parity_exceptions:
+  - dispatch
+```
+
 ---
 
 ## Tier 5 — Optional / Convention Fields
@@ -77,12 +174,23 @@ from the merged context using `{{fieldName}}` syntax.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `changelog` | `string` | Persona version history as a changelog block scalar. `buildContext()` calls `resolveChangelogMeta()` on this field to derive the `version` and `last_updated` context variables automatically. First matching entry wins. Supported formats: `X.Y.Z (YYYY-MM-DD): …` or `X.Y.Z: …`. See [Utility Functions — `resolveChangelogMeta`](agents/project-manifest/api-surface.md#resolveclhanglogmetainput) for the full parsing rules. |
-| `version` | `string` | **Inert when `changelog` is present.** If provided without a `changelog` field, it was previously used as the persona version string — however, `buildContext()` now unconditionally derives `version` from `changelog` (or `default_version`, then `'0.0.0'`). Any `version:` value in per-persona YAML is silently overwritten. Use `changelog` instead. |
+| `changelog` | `string` | Persona version history as a changelog block scalar. `buildContext()` calls `resolveChangelogMeta()` on this field to derive the `version` and `last_updated` context variables automatically. First matching entry wins. Supported formats: `X.Y.Z (YYYY-MM-DD): …` or `X.Y.Z: …`. See [Utility Functions — `resolveChangelogMeta`](agents/project-manifest/api-surface.md#resolvechangelogmetainput) for the full parsing rules. |
+| `version` | `string` | **Always overwritten — do not set manually.** `buildContext()` unconditionally derives `version` from `changelog` → `default_version` → `'0.0.0'`. Any `version:` value in per-persona YAML is silently ignored. Use the `changelog` field to control the rendered version. |
 | `author` | `string` | Author name. Useful for frontmatter or documentation. |
 | `last_updated` | `string` | ISO 8601 date string (e.g. `'2026-04-01'`). Explicit YAML values are preserved. When absent, `buildContext()` derives it from the `changelog` date component (empty string if the changelog entry has no date). |
 | `id` | `string` | Machine-friendly identifier. Used by some plugins for registry lookups. |
 | `role` | `string` | Role name. Used by plugins that validate personas against a workflow manifest (e.g. the ledger plugin). |
+| `displayName` | `string` | Human-readable display name. When present, used instead of `name` in contexts where a user-friendly label is preferred. Falls back to `name` when absent. |
+| `identity` | `string` | **ai-insights convention.** Short role title used in the `**Identity: {{identity}}.**` mission header line. Required in every ai-insights persona; used by `generate-agents-overview.js` for the overview document. Example: `"Staff Software Engineer"`. |
+| `use_when` | `string` | **ai-insights convention.** One-line description of when to invoke this persona. Used by `generate-agents-overview.js`. Applies to standalone and ledger-support personas. |
+| `key_behavior` | block scalar | **ai-insights convention.** Newline-delimited list of notable behavior points. Used by `generate-agents-overview.js` (first line rendered). Applies to all personas where notable behavior is documented. |
+| `modes` | block scalar | **ai-insights convention.** Newline-delimited list of operating modes. Used by `generate-agents-overview.js`. Applies to personas with distinct operating modes. |
+| `inputs` | `string` | **ai-insights convention.** What this persona receives as input. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
+| `outputs` | `string` | **ai-insights convention.** What this persona produces as output. Used by `generate-agents-overview.js`. Applies to ledger pipeline personas only. |
+| `notes` | `string` | **ai-insights convention.** Optional freeform note rendered as a **Notes:** bullet in the overview. Example: `"Runs in parallel with the Plan Auditor; never blocks it"`. |
+| `design_notes` | block scalar | **ai-insights convention.** Deliberate, documented deviations from the project's persona design guide, each naming the rule waived and the constraint forcing it. Read by auditing agents to distinguish accepted exceptions from defects. Not consumed by the engine or any template. |
+| `audit_guide_version` | `string` | **ai-insights convention.** Version of the persona design guide this persona was last audited against (e.g. `"2.9"`). Written only on a passing audit. Not consumed by the engine or any template. |
+| `audit_date` | `string` | **ai-insights convention.** ISO 8601 date of the last passing audit (e.g. `"2026-08-26"`). Not consumed by the engine or any template. |
 
 ---
 

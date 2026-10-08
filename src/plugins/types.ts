@@ -60,6 +60,33 @@ export interface PersonaMetadata {
    * map — an unknown slug produces an error-severity `ValidationResult`.
    */
   subagents?: string[];
+  /**
+   * Optional list of target names this persona builds for.
+   *
+   * Resolved by `resolvePersonaTargets()` in `src/builders/persona-index.ts`:
+   *   - Absent → the persona builds for every registered target.
+   *   - A declared subset of registered target names → only those targets.
+   *   - An unknown target name, a non-string entry, or an empty array all
+   *     produce an error-severity `ValidationResult` (the offending name is
+   *     dropped from the resolved list rather than failing the whole field).
+   *   - Duplicate entries are silently removed.
+   *
+   * `buildSuite()` and `build()` use the resolved list to skip rendering this
+   * persona for excluded targets. `buildPersona()` remains an explicit single
+   * build and does not apply this field.
+   */
+  targets?: string[];
+  /**
+   * Optional list of capability names exempted from the cross-target tool
+   * capability parity check for this persona.
+   *
+   * Parity validation (added in a later step) compares which mapped
+   * capabilities (e.g. `execute`, `read`, `dispatch`) a persona grants on
+   * each of its built targets, and reports a mismatch as an error. Listing a
+   * capability here documents that the difference is intentional and
+   * suppresses the corresponding error for this persona.
+   */
+  tool_parity_exceptions?: string[];
   /** Free-form context variables available during template rendering */
   [key: string]: unknown;
 }

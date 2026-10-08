@@ -5,8 +5,8 @@
  * Re-exports every public symbol from the engine layer.
  */
 
-export { resolvePartials } from './partials.js';
-export { resolveConditionals } from './conditionals.js';
+export { resolvePartials, collectPartialReferences } from './partials.js';
+export { resolveConditionals, stripComments } from './conditionals.js';
 export { resolveVariables } from './variables.js';
 export {
   collapseBlankLines,

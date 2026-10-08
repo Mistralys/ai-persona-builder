@@ -116,6 +116,42 @@ mcpServers:
 | MCP server declaration | Embedded in `tools` array | Separate `mcpServers` frontmatter field |
 | Tool list YAML field | `tools` | `cc_tools` (falls back to `tools` if absent) |
 
+### Capability Correspondence & Cross-Target Validation
+
+The library maps a small set of basic capabilities to each target's tool names, and uses that map
+to catch the mistakes above automatically — you don't need to remember the notation rules by
+heart. This correspondence is deliberately **rough**: only the capabilities below are mapped, and
+any tool with no counterpart on the other target (VS Code's `vscode`, `browser`; any custom or
+extension tool) is silently ignored by every check.
+
+| Capability | VS Code (`tools`) | Claude Code (`cc_tools`) |
+|------------|--------------------|---------------------------|
+| `execute` | `execute` | `Bash` |
+| `read` | `read` | `Read` |
+| `edit` | `edit` | `Edit`, `Write` |
+| `search` | `search` | `Grep`, `Glob` |
+| `web` | `web` | `WebFetch`, `WebSearch` |
+| `dispatch` | `agent` | `Task`, `Agent` |
+| `todo` | `todo` | `TodoRead`, `TodoWrite` |
+| `mcp:<server>` | `server/*`, `server/tool` | `mcp__server`, `mcp__server__tool` |
+
+Deep Agents declares no capability map at all — the orchestrator always provides its own `task`
+tool, so Deep Agents personas carry no tool grants to validate.
+
+Three build-time checks read this map:
+
+- **Dispatch grant.** A persona that declares `subagents` (or otherwise triggers a configured
+  `BuildConfig.toolRequirements` rule, e.g. a handoff partial) must grant a `dispatch`-mapped tool
+  on every mapped target it is built for. A missing grant is an **error**.
+- **Capability parity.** A persona built for two or more mapped targets must grant the same mapped
+  capabilities on each — see §4 below for the exemption mechanism.
+- **Foreign notation.** A tool name spelled in another target's notation (e.g. `read` appearing in
+  `cc_tools`) produces a **warning** naming the recognising target and the current target's own
+  equivalent tool names.
+
+See `docs/agents/project-manifest/api-surface.md` (**Target Tool Capability Resolution**) for the
+underlying `TargetDefinition.toolCapabilities` / `mcpToolPattern` fields and resolver functions.
+
 ---
 
 ## 3. Frontmatter Differences
@@ -131,9 +167,52 @@ tools: ['read', 'edit', 'search', 'my_server/*']
 ```
 
 Key fields:
-- `name` — includes the version number (e.g. `v1.0.0`)
-- `description` — shown in the VS Code agent picker
-- `tools` — array of VS Code semantic tool names + MCP wildcards
+- `name` — display name; defaults to the filename if omitted.
+- `description` — shown as placeholder text in the chat input when the agent is active.
+- `tools` — array of VS Code semantic tool names + MCP wildcards (`<server>/*`).
+- `model` — a single model name, or a prioritized array Copilot tries in order until one is available.
+
+### Complete VS Code Agent Field Reference
+
+VS Code supports additional frontmatter fields beyond what the default `@mistralys/persona-builder` templates emit. Custom templates or plugins can include any of these.
+
+**Locations:** `.github/agents/` (workspace), `.claude/agents/` (workspace — VS Code reads these directly with automatic tool name mapping), `~/.copilot/agents/` (user profile, across all workspaces).
+
+**Core fields:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name; defaults to the filename if omitted. |
+| `description` | Shown as placeholder text in the chat input when this agent is active. |
+| `argument-hint` | Hint text in the chat input guiding how to invoke the agent. |
+
+**Tool and access control:**
+
+| Field | Description |
+|-------|-------------|
+| `tools` | List of available tools (built-in, MCP, or extension-contributed). `<server>/*` includes all tools from an MCP server. |
+| `agents` | Which other custom agents this one can invoke as subagents. `*` allows all, `[]` blocks all. Requires the `agent` tool in `tools`. |
+| `user-invocable` | `false` hides the agent from the agents dropdown (still usable as a subagent). Default `true`. |
+| `disable-model-invocation` | `true` blocks other agents from invoking this one as a subagent. Default `false`. |
+
+**Model:**
+
+| Field | Description |
+|-------|-------------|
+| `model` | A single model name, or a prioritized array Copilot tries in order until one is available. |
+
+**Behavior:**
+
+| Field | Description |
+|-------|-------------|
+| `target` | `vscode` or `github-copilot`, for which environment the agent runs in. |
+| `mcp-servers` | Inline MCP server config; only relevant when `target: github-copilot`. |
+| `handoffs` | Suggested next-step buttons after a response. Each entry has `label`, `agent`, `prompt`, `send` (auto-submit if `true`), and an optional `model`. |
+| `hooks` | (Preview) Lifecycle hooks scoped to this agent, only active while it is running. Requires a setting flag to enable. |
+
+> **Deprecated:** `infer` — previously controlled both `user-invocable` and `disable-model-invocation` with a single flag. Use the two separate fields instead.
+>
+> **Cross-compatibility:** When VS Code finds agent files in `.claude/agents/`, it reads Claude Code's own field set (`name`, `description`, `tools`, `disallowedTools`) and maps tool names across automatically, so the same definitions work in both environments.
 
 ### Claude Code Frontmatter
 
@@ -154,24 +233,156 @@ mcpServers:
 ```
 
 Key fields:
-- `name` — the filename stem, **no version number**
-- `description` — brief description of the persona (shown in Claude Code)
-- `model` — Claude Code model identifier (or `inherit` to use the user's configured model)
-- `memory` — memory scope (`project`, `user`, or `false`)
-- `tools` — Claude Code built-in tools only (capitalized names); rendered as a block sequence by default
-- `mcpServers` — list of MCP server names available to this persona
+- `name` — unique identifier (lowercase, hyphens). This is the value used for `@agent-<name>` routing.
+- `description` — trigger text Claude matches against for automatic subagent delegation.
+- `model` — `sonnet`, `opus`, `haiku`, `fable`, a full model ID (e.g. `claude-opus-4-8`), or `inherit` (default).
+- `memory` — `user`, `project`, `local`, or `false`. Gives the subagent a persistent memory directory that survives across sessions.
+- `tools` — allowlist of tools the subagent can use. Omit to inherit from the parent session.
+- `mcpServers` — MCP servers scoped to this subagent (inline definitions or references to already-configured servers).
+
+### Complete Claude Code Field Reference
+
+Claude Code supports additional frontmatter fields beyond what the default `@mistralys/persona-builder` templates emit. Custom templates or plugins can include any of these.
+
+**Required:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Unique identifier (lowercase, hyphens). Used for `@agent-<name>` routing. |
+| `description` | Trigger text for automatic subagent delegation. |
+
+**Tool and access control:**
+
+| Field | Description |
+|-------|-------------|
+| `tools` | Allowlist of tools the subagent can use. Omit to inherit from the parent session. Accepts MCP patterns (`mcp__<server>` or `mcp__<server>__*`) and subagent restrictions (`Agent(agent-name, ...)`). |
+| `disallowedTools` | Denylist — removes tools the subagent would otherwise inherit. Applied before `tools` when both are set. |
+| `permissionMode` | `default`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions`, or `plan`. Ignored for plugin-distributed subagents. |
+| `mcpServers` | MCP servers scoped to this subagent — inline definitions or string references to already-configured servers. |
+
+**Model and cost:**
+
+| Field | Description |
+|-------|-------------|
+| `model` | `sonnet`, `opus`, `haiku`, `fable`, a full model ID (e.g. `claude-opus-4-8`), or `inherit` (default). |
+| `effort` | `low`, `medium`, `high`, `xhigh`, or `max`. Overrides the session's effort level while this subagent is active. |
+| `maxTurns` | Caps how many agentic turns the subagent can take before stopping. |
+
+**Behavior and lifecycle:**
+
+| Field | Description |
+|-------|-------------|
+| `background` | `true` to always run as a background task rather than blocking the main conversation. Default `false`. |
+| `isolation` | `worktree` to give the subagent its own temporary git worktree instead of working directly in the checkout. |
+| `initialPrompt` | Auto-submitted as the first user turn when the agent runs as the main session agent (via `--agent` or the `agent` setting). |
+| `color` | Display color in the task list/transcript (`red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan`). |
+
+**Knowledge and memory:**
+
+| Field | Description |
+|-------|-------------|
+| `skills` | List of skills whose content is preloaded into the subagent's context at startup. |
+| `memory` | `user`, `project`, `local`, or `false`. Gives the subagent a persistent memory directory (`~/.claude/agent-memory/<name>/`, `.claude/agent-memory/<name>/`, or `.claude/agent-memory-local/<name>/`). |
+
+**Other:**
+
+| Field | Description |
+|-------|-------------|
+| `hooks` | Lifecycle hooks (`PreToolUse`, `PostToolUse`, `Stop`, etc.) scoped to this subagent. Ignored for plugin-distributed subagents. |
+
+> **Plugin-distributed subagents:** When a subagent comes from a plugin rather than `.claude/agents/` directly, `tools`, `mcpServers`, `hooks`, and `permissionMode` are all **ignored** for security reasons.
+
+### Skill Frontmatter (Cross-Platform)
+
+Skills (`SKILL.md` files) use a different frontmatter schema than personas. While persona-builder's built-in targets (`vscode`, `claude-code`, `deep-agents`) produce persona output, the [`TargetRegistry`](agents/project-manifest/api-surface.md#targetregistry) API can register custom skill targets with skill-appropriate frontmatter templates. See the [Building Skills](building-skills.md) guide for a complete walkthrough.
+
+VS Code and Claude Code now follow the same open standard ([agentskills.io](https://agentskills.io)) for cross-tool portability.
+
+**Locations:** project — `.github/skills/`, `.claude/skills/`, `.agents/skills/`; personal — `~/.copilot/skills/`, `~/.claude/skills/`, `~/.agents/skills/`.
+
+**Identity and triggering:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `name` | **Required** (must match directory name, max 64 chars, lowercase/hyphens/numbers only) | Optional (defaults to directory name) | Display name / identifier. VS Code silently fails to load skills with invalid names. |
+| `description` | **Required** (max 1,024 chars) | Recommended (falls back to first body paragraph; combined with `when_to_use`, truncated at 1,536 chars) | What the skill does and when to use it. |
+| `when_to_use` | — | Optional | Extra trigger phrases appended to `description` (shares the 1,536-char cap). |
+| `argument-hint` | Optional | Optional | Shown in autocomplete to hint at expected arguments. |
+| `arguments` | — | Optional | Named positional arguments for `$name` substitution. |
+| `paths` | — | Optional | Glob patterns restricting when the skill auto-activates. |
+
+**Invocation control:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `disable-model-invocation` | Optional | Optional | `true` blocks auto-invocation; only manual `/name` trigger works. |
+| `user-invocable` | Optional | Optional | `false` hides from the `/` menu; the model can still invoke it. |
+
+**Tool access:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `allowed-tools` | — | Optional | Pre-approve tools (no prompting) while the skill is active. |
+| `disallowed-tools` | — | Optional | Remove tools from the available pool while active; resets on next message. |
+
+**Model and reasoning:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `model` | — | Optional | Overrides the active model for the rest of the turn. |
+| `effort` | — | Optional | `low` / `medium` / `high` / `xhigh` / `max`, overriding session effort. |
+
+**Subagent execution:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `context` | Experimental (requires setting) | Optional | `fork` to run in an isolated subagent instead of inline. |
+| `agent` | — (fork is agent-agnostic) | Optional | Which subagent type to use with `context: fork`. Defaults to `general-purpose`. |
+
+**Other:**
+
+| Field | VS Code | Claude Code | Description |
+|-------|---------|-------------|-------------|
+| `hooks` | — | Optional | Lifecycle hooks scoped to the skill. |
+| `shell` | — | Optional | `bash` (default) or `powershell` for inline commands. |
+
+> **Key asymmetry:** Claude Code's `context: fork` lets you target a named agent via the `agent` field; VS Code's fork is currently agent-agnostic (spins up a generic subagent).
+
+**Skill-Drives-Agent pattern (Claude Code):** When a skill declares both `context: fork` and `agent: <name>`, invoking the skill spins up an isolated subagent running under that agent's system prompt, tools, and model. The skill body becomes the driving prompt for the forked subagent, and only its summary returns to the main conversation. The `agent` value must match the `name` field of an agent file in `.claude/agents/` (built-in agents like `Explore`, `Plan`, and `general-purpose` also work).
+
+This is the inverse of the **Agent-Preloads-Skills** direction, where you put a `skills:` list in a subagent's frontmatter to preload skill content into that subagent's context at startup. The two patterns serve different use cases:
+
+| Pattern | Frontmatter | Who drives | Use case |
+|---------|-------------|------------|----------|
+| Skill drives agent | `context: fork` + `agent:` on the **skill** | The skill body is the prompt | Run a specific task under an agent's persona (e.g. invoke an audit skill that delegates to a Curator agent) |
+| Agent preloads skills | `skills:` on the **agent** | The user's message is the prompt | Give an agent domain knowledge at startup (e.g. a coding agent that always has style-guide skills loaded) |
+
+> **VS Code loading model:** VS Code uses three-level progressive loading — `name`/`description` are always visible, the SKILL.md body loads only on invocation, and supporting files in the skill directory load only when referenced.
 
 ### Fields That Only Exist in One Target
 
 | Field | VS Code | Claude Code |
 |-------|---------|-------------|
-| `name` (with version) | Yes | No — uses filename stem |
-| `description` | Yes | Yes |
+| `name` | Yes (with version in display name) | Yes (filename stem, used for routing) |
+| `description` | Yes (placeholder text) | Yes (auto-delegation trigger) |
 | `tools` | Yes (MCP refs allowed) | Yes (capitalized built-in names) |
+| `disallowedTools` | No | Optional (denylist) |
+| `agents` | Yes (subagent access control) | No (uses `Agent()` in `tools` instead) |
 | `permissionMode` | No | Optional |
-| `model` | Optional | Yes |
+| `model` | Optional (single or prioritized array) | Yes (single model or alias) |
+| `effort` | No | Optional |
+| `maxTurns` | No | Optional |
 | `memory` | No | Yes |
-| `mcpServers` | No | Yes |
+| `mcpServers` / `mcp-servers` | `mcp-servers` for `target: github-copilot` only | Yes — `mcpServers` |
+| `background` | No | Optional |
+| `isolation` | No | Optional |
+| `skills` | No | Optional |
+| `hooks` | Preview (requires setting flag) | Optional |
+| `handoffs` | Yes (next-step buttons) | No |
+| `target` | Yes (`vscode` / `github-copilot`) | No |
+| `user-invocable` | Yes | No (Claude Code uses it only on skills) |
+| `disable-model-invocation` | Yes | No (Claude Code uses it only on skills) |
+| `id` | Yes | No |
 
 ---
 
@@ -225,6 +436,26 @@ cc_tools:
 
 Same pattern — `da_tools` overrides the tool list for the Deep Agents target. Falls back to
 `tools` when absent. Only injected when `da_file_name` is set.
+
+### Exempting Intentional Differences — `tool_parity_exceptions`
+
+Sometimes a capability difference between targets is intentional — a target genuinely has no
+equivalent for a tool the other grants. List the capability name in `tool_parity_exceptions` to
+exempt it from the parity check for that persona:
+
+```yaml
+# VS Code has browser-based web access; Claude Code has no counterpart for it
+tool_parity_exceptions:
+  - web
+```
+
+- Only capability *names* from the correspondence table above (or an `mcp:<server>` form) are
+  recognised — an unrecognised name produces a **warning** in `BuildSummary.issues` (it silently
+  exempts nothing, so the typo is surfaced rather than swallowed).
+- Exceptions are per-persona and apply across every target pair — there is no per-target-pair
+  exception.
+- An exempted capability is skipped by the parity check entirely; it does **not** silence the
+  dispatch-grant or foreign-notation checks, which are independent.
 
 ---
 
@@ -307,6 +538,9 @@ Before submitting persona changes, verify:
 | 8 | Claude Code frontmatter fields | Include `model` and `memory` — they have no VS Code equivalent; `description` is also referenced by the default template |
 | 9 | Version in name | VS Code `name` includes version (`v1.0.0`); Claude Code `name` does not |
 | 10 | Target conditionals | Use `{{#if target_vscode}}` / `{{#if target_claude_code}}` for platform-specific content |
+| 11 | Dispatch grant | A persona that declares `subagents` (or triggers a `toolRequirements` rule) needs a `dispatch`-mapped tool (`agent` / `Task`, `Agent`) on every target it builds for — the build now catches a missing grant as an error |
+| 12 | Capability parity | Granting a mapped capability (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`, `mcp:<server>`) on one target but not another now fails the build unless it's listed in `tool_parity_exceptions` — see §4 |
+| 13 | Foreign tool notation | Writing `read`/`edit` etc. into `cc_tools`, or `Read`/`Edit` etc. into `tools`, now produces a foreign-notation warning naming the correct equivalent |
 
 ---
 

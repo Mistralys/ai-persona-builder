@@ -43,6 +43,18 @@ defaultRegistry.register({
   defaultFrontmatter: DEFAULT_FRONTMATTER_VSCODE,
   contextFlags: { target_vscode: true },
   defaultEnabled: true,
+  toolsContextKey: 'tools',
+  toolCapabilities: {
+    execute: ['execute'],
+    read: ['read'],
+    edit: ['edit'],
+    search: ['search'],
+    web: ['web'],
+    dispatch: ['agent'],
+    todo: ['todo'],
+  },
+  // Matches `server/*` and `server/tool` — group 1 captures the server name.
+  mcpToolPattern: /^([\w-]+)\/.+$/,
 });
 
 defaultRegistry.register({
@@ -52,6 +64,20 @@ defaultRegistry.register({
   defaultFrontmatter: DEFAULT_FRONTMATTER_CLAUDE_CODE,
   contextFlags: { target_claude_code: true },
   defaultEnabled: true,
+  toolsContextKey: 'cc_tools',
+  toolCapabilities: {
+    execute: ['Bash'],
+    read: ['Read'],
+    edit: ['Edit', 'Write'],
+    search: ['Grep', 'Glob'],
+    web: ['WebFetch', 'WebSearch'],
+    dispatch: ['Task', 'Agent'],
+    todo: ['TodoWrite', 'TodoRead'],
+  },
+  // Matches `mcp__server` and `mcp__server__tool` — group 1 captures the
+  // server name. Non-greedy so a tool-name suffix doesn't get absorbed into
+  // the server name.
+  mcpToolPattern: /^mcp__([\w-]+?)(?:__.+)?$/,
 });
 
 defaultRegistry.register({
@@ -61,4 +87,7 @@ defaultRegistry.register({
   defaultFrontmatter: DEFAULT_FRONTMATTER_DEEP_AGENTS,
   contextFlags: { target_deep_agents: true },
   defaultEnabled: false,
+  // No capability map: the orchestrator always provides its own `task` tool,
+  // and deep-agents personas carry no tool grants of their own.
+  toolsContextKey: 'da_tools',
 });

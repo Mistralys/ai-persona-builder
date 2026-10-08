@@ -8,14 +8,16 @@
  * MCP server blocks).  Projects needing richer frontmatter register custom
  * templates via the `PersonaBuildPlugin.frontmatterTemplates` property.
  *
- * Template rendering follows the same two-step sequence as body rendering:
- *   1. resolveConditionals() — resolve {{#if flag}} blocks
- *   2. resolveVariables()    — substitute {{varName}} markers
+ * Template rendering follows the same sequence as body rendering, minus the
+ * partials step (frontmatter has none):
+ *   1. stripComments()      — remove {{!-- … --}} / {{! … }} comment tags
+ *   2. resolveConditionals() — resolve {{#if flag}} blocks
+ *   3. resolveVariables()    — substitute {{varName}} markers
  *
  * No partials in frontmatter — frontmatter is kept deliberately simple.
  */
 
-import { resolveConditionals } from '../engine/conditionals.js';
+import { resolveConditionals, stripComments } from '../engine/conditionals.js';
 import { resolveVariables } from '../engine/variables.js';
 import type { PersonaBuildPlugin } from '../plugins/types.js';
 import type { TargetRegistry } from '../targets/registry.js';
@@ -86,9 +88,15 @@ export function resolveFrontmatterTemplate(
 /**
  * Render a frontmatter template string against the given context.
  *
- * Applies the standard two-step template resolution:
- *   1. `resolveConditionals` — `{{#if flag}}` blocks
- *   2. `resolveVariables`    — `{{varName}}` substitution
+ * Applies the standard three-step template resolution:
+ *   1. `stripComments`      — `{{!-- … --}}` / `{{! … }}` comment tags
+ *   2. `resolveConditionals` — `{{#if flag}}` blocks
+ *   3. `resolveVariables`    — `{{varName}}` substitution
+ *
+ * Comments are stripped first because `resolveConditionals()` does not
+ * recognise comment delimiters — a comment left in place would otherwise
+ * pass through it untouched and only its inner text (if any looked like a
+ * variable marker) would reach `resolveVariables()`.
  *
  * @param template  The raw frontmatter template string (may contain markers)
  * @param context   Key-value context for variable substitution
@@ -100,7 +108,8 @@ export function renderFrontmatter(
   context: Record<string, unknown>,
   filename: string,
 ): string {
-  let rendered = resolveConditionals(template, context);
+  let rendered = stripComments(template);
+  rendered = resolveConditionals(rendered, context);
   rendered = resolveVariables(rendered, context, filename);
   return rendered;
 }

@@ -1,5 +1,21 @@
 # Constraints & Conventions
 
+> **Scope:** Architectural invariants, naming rules, and known limitations of the library itself.
+> Conventions for authoring the manifest documents live in the [manifest README](README.md).
+
+## Contents
+
+- [Architectural Invariants](#architectural-invariants)
+- [Naming Conventions](#naming-conventions)
+- [Template Syntax](#template-syntax)
+- [package.json Path Conventions](#packagejson-path-conventions)
+- [Sub-Agent Validation Constraints](#sub-agent-validation-constraints)
+- [Known Limitations](#known-limitations)
+- [Directory Convention](#directory-convention)
+- [Test Suite](#test-suite)
+
+---
+
 ## Architectural Invariants
 
 ### 1. Zero-Dependency Engine Layer — MUST preserve
@@ -7,6 +23,8 @@
 All five engine modules (`partials.ts`, `conditionals.ts`, `variables.ts`, `postProcessor.ts`, `serializer.ts`) have **zero imports** — no Node built-ins, no external packages, no internal cross-module references. This makes the engine fully portable to browser environments or non-Node runtimes.
 
 > Any new function added to `src/engine/` **must** maintain this zero-dependency invariant. If a function requires `node:fs`, `node:path`, or any npm package, it belongs in `src/loaders/` or `src/builders/`, not `src/engine/`.
+
+`conditionals.ts`'s `resolveConditionals()` and `stripComments()` normalise CRLF/lone-CR input to LF as their first statement, via a module-private `toLf()` that mirrors `postProcessor.ts`'s `normalizeNewlines()`. The rule is duplicated, not imported, because the zero-import invariant above forbids `conditionals.ts` from importing anything, even from a sibling engine module — `toLf()`'s JSDoc names `normalizeNewlines()` as its twin so a change to one prompts review of the other.
 
 ### 2. Synchronous Plugin Runner — plan for async before adding remote plugins
 
@@ -18,9 +36,28 @@ The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All six hook f
 
 When `strict: true` is used **without** `check: true`, `build()` writes all output files to disk before evaluating validation failures — leaving partial artefacts on failure. CI pipelines calling `build()` in validation mode **must** combine `strict: true` with `check: true` to avoid partial writes.
 
-### 4. Signatures Only — No Implementation in API Surface
+### 3b. `TargetDefinition.mcpToolPattern` MUST NOT carry the `g` or `y` flag
 
-The `api-surface.md` manifest document contains only public constructors, properties, and method signatures. Never include method bodies, internal logic, or private members.
+`TargetRegistry.register()` throws if a registered `mcpToolPattern` is a global (`g`) or sticky
+(`y`) `RegExp`. Both flags give `exec()`/`test()` mutable `lastIndex` state, and the same `RegExp`
+instance is shared between registry copies (`clone()`, `allDefinitions()`, `get()`) — a
+global/sticky pattern would make match results depend on call order across those copies. Any new
+built-in or custom target's `mcpToolPattern` must be a plain (non-`g`, non-`y`) pattern.
+
+### 3c. Build Success: Error-Severity Results Always Fail — MUST preserve
+
+Since WP-010 (Build Success Semantics), `build()` computes
+`success = errors === 0 && (!strict || warnings === 0)`. An error-severity `ValidationResult` —
+from a plugin's `onValidate`, a built-in validator (`validateSubagentRefs()`,
+`validateToolRequirements()`, `validateToolParity()`), or an index-level issue in
+`PersonaIndex.issues` — fails **every** build and exits the CLI with code `1`, whether or not
+`config.strict` is set. `strict: true` only adds a warnings-fail-too requirement and its throw
+behaviour; it is no longer the sole gate on error-severity results. `BuildSummary.strictFailures`
+reflects this: it is populated unconditionally (every result's `validationResults` plus `issues`),
+not only when `strict` is set. Any future validator or index-level issue **must** use `'error'`
+severity if its finding should fail a non-strict build — `'warning'` severity is silently
+non-fatal outside `strict` mode. See `docs/cli.md` and `docs/agents/project-manifest/api-surface.md`
+(`BuildSummary`) for the consumer-facing semantics.
 
 ---
 
@@ -56,16 +93,20 @@ Invalid examples: `My_Persona.md`, `--bad.md`, `foo..bar.md`
 
 | Syntax | Purpose | Processor |
 |--------|---------|-----------|
+| `{{!-- comment --}}` | Comment (multi-line, may contain a literal `}}`) | `stripComments()` — run first, before everything else |
+| `{{! comment }}` | Comment (multi-line, cannot contain a literal `}}`) | `stripComments()` — run first, before everything else |
 | `{{> partialName}}` | Partial inclusion | `resolvePartials()` — depth-2 recursion |
 | `{{#if flag}}…{{/if}}` | Conditional block | `resolveConditionals()` |
 | `{{#if flag}}…{{else}}…{{/if}}` | Conditional with fallback | `resolveConditionals()` |
-| `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` via pre-processor |
+| `{{#if flag}}…{{else if flag2}}…{{else}}…{{/if}}` | Else-if chain (first truthy branch wins; final `{{else}}` optional) | `resolveConditionals()` — resolved natively by the tokenizer, no rewrite pre-pass |
 | `{{variableName}}` | Variable substitution | `resolveVariables()` |
 | `\{{varName}}` | Escaped variable marker (literal pass-through, no warning) | `resolveVariables()` |
 
 > **Escape syntax note:** The backslash prefix is consumed by the engine and does **not** appear in the rendered output. `\{{varName}}` in a template produces `{{varName}}` verbatim in the final file — no substitution occurs and no unresolved-variable warning is emitted. To produce a literal `\{{varName}}` string in output (backslash included), use a double backslash: `\\{{varName}}` → `\{{varName}}`.
 
-**Processing order matters:** partials → conditionals → variables. Running them out of order will produce incorrect output.
+> **Comment whitespace note:** Both comment forms share the identical standalone/inline/blank-run-merge whitespace contract as conditional tags (see `api-surface.md`'s `stripComments()` entry). A standalone tag on its own line — conditional or comment — has its entire line removed; an unmatched or unterminated tag of either kind passes through the output literally. Two or more removed tags — conditional blocks that resolve to nothing, standalone comments, or a mix separated only by whitespace-only lines (including no gap at all) — merge their surrounding blank-line runs into one, instead of merging pairwise and leaving leftover runs to add together; a kept block's content still breaks the merge.
+
+**Processing order matters:** stripComments → partials → conditionals → variables. Running them out of order will produce incorrect output — in particular, a comment must be stripped before the raw-template tool-requirement scan (see Sub-Agent Validation Constraints below) and before partials expand, or a commented-out `{{> partial}}` would still be treated as a live reference.
 
 ---
 
@@ -80,19 +121,52 @@ When modifying paths in `package.json`, strictly adhere to these prefix rules to
 
 ## Sub-Agent Validation Constraints
 
-### 7. `subagents` Slugs Must Reference Existing Cross-Suite Personas
+### 4. `subagents` Slugs Must Reference Existing Cross-Suite Personas
 
-`PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `buildAgentNameMap()` during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
+`PersonaMetadata.subagents` declares a list of cross-suite persona slugs this persona may delegate to as sub-agents. Every declared slug **must** have a corresponding `agent_slug_*` key in the agent map built by `agentNameMapFromIndex()` (derived from `scanPersonas()`'s `PersonaIndex`, `src/builders/persona-index.ts`) during the pre-scan phase. If a slug has no matching entry, `validateSubagentRefs()` (`src/validators/subagent-validator.ts`, exported from `src/validators/index.ts`) emits an `error`-severity `ValidationResult` for each unknown slug at validation step 10 of `buildPersona()`.
 
 **Key derivation rule:** Slug `my-agent` maps to key `agent_slug_my_agent` (hyphens → underscores). The agent map is populated from the `slug` field of every persona YAML in all configured suites — a slug only resolves if the corresponding persona exists *and* is discoverable in the build configuration.
 
-**Strict mode:** When `strict: true` is set in `BuildConfig`, unknown slugs cause `buildSuite()` to throw after collecting all validation results. When not in strict mode, the errors are reported in `BuildResult.validationResults` but do not halt the build.
+**Target-aware check:** When `buildPersona()` is called with a `personaIndex` (the case whenever `buildSuite()`/`build()` orchestrate the call, since both forward their index), `validateSubagentRefs()` also flags a slug that *does* resolve to a real persona but whose resolved `targets` (see invariant on target resolution below) exclude the target currently being built — e.g. a `claude-code` persona declaring a sub-agent that is only built for `vscode`. This is a second, independent `error`-severity `ValidationResult`, additive to the unknown-slug check: a slug can fail both if `agentMap` and `personaIndex` were built from different scans. Omitting `personaIndex` (a direct `buildPersona()` call without one) skips only this check.
 
-**Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]`.
+**Build failure without `strict`:** Both checks emit `error`-severity `ValidationResult`s, and since WP-010 (Build Success Semantics) any error-severity result fails the build by default — `build()` returns `BuildSummary.success = false` (CLI exit 1) whether or not `strict` is set. `strict: true` changes *how* that failure surfaces: instead of a returned failed summary, `build()` throws after collecting all validation results across every suite (see also invariant 3 on combining `strict` with `check` to avoid partial writes on that throw path).
+
+**Absence is valid:** Personas that do not declare `subagents` (or declare an empty list) pass validation silently — `validateSubagentRefs()` early-exits with `[]` before either check runs.
+
+> **User-facing reference:** See [Metadata Reference — Sub-Agent Declarations](../../metadata-reference.md#tier-4c--sub-agent-declarations) for YAML examples, slug resolution walkthrough, and template access patterns.
 
 ---
 
-### 8. Planned `onPreRender` Hook — Not Yet Implemented
+### 4b. Tool Validation Is Driven Entirely by `TargetDefinition.toolCapabilities`
+
+The dispatch-grant (`validateToolRequirements()`), capability-parity (`validateToolParity()`), and
+foreign-notation checks all read the same `TargetDefinition.toolCapabilities` /
+`mcpToolPattern` vocabulary (`src/targets/tools.ts`) — there is **no separate hand-maintained list**
+of dispatch tools or foreign-notation patterns anywhere in the codebase. Any change to what counts
+as a "dispatch tool" or a "foreign spelling" for a target **must** go through
+`TargetDefinition.toolCapabilities` / `mcpToolPattern`, not a new branch in a validator.
+
+- **Rough correspondence is deliberate.** Only seven capabilities are mapped
+  (`execute`, `read`, `edit`, `search`, `web`, `dispatch`, `todo`) plus `mcp:<server>` via
+  `mcpToolPattern`. A tool name with no counterpart on another target (VS Code's `vscode`,
+  `browser`; any custom or extension tool) is invisible to every check — this is a scope decision
+  (2026-09-29), not an oversight. Do not add exhaustive mapping without a fresh decision.
+- **Parity requires ≥ 2 mapped, built targets.** `validateToolParity()` short-circuits to no
+  findings when fewer than two of a persona's built targets have both a registered
+  `TargetDefinition` capability map and a defined `BuildResult.effectiveTools`. `deep-agents`
+  (no capability map) never participates on either side of a parity comparison.
+  `tool_parity_exceptions` on the persona YAML exempts named capabilities from this check only —
+  it has no effect on the dispatch-grant or foreign-notation checks.
+- **Dispatch-grant runs per-persona, per-target**, inside `buildPersona()` step 10 — it needs only
+  that target's `effectiveTools`, not a cross-target view. **Parity runs as a `build()` post-pass**
+  — it needs every built target's `effectiveTools` for the same persona, which a single-target
+  `buildPersona()`/`buildSuite()` call cannot see (see Known Limitation below).
+- **`SUBAGENT_DISPATCH_REQUIREMENT` is always applied.** A consumer `BuildConfig.toolRequirements`
+  entry with the same `id` (`'subagent-dispatch'`) replaces it; any other `id` is additive.
+
+---
+
+### 5. Planned `onPreRender` Hook — Not Yet Implemented
 
 > **Planned — not yet implemented.** This hook does not exist in the current library. The description below documents the *intended* design for a future release.
 
@@ -139,6 +213,8 @@ The loaders (`loadPartials`, `discoverPersonaYamls`, `loadContent`) pass caller-
 
 `resolveFrontmatterTemplate()` resolves the frontmatter template via the precedence chain: plugin `frontmatterTemplates` → `BuildConfig.frontmatter` → `registry.get(target).defaultFrontmatter` → library default (`DEFAULT_FRONTMATTER_CLAUDE_CODE`). Custom targets that provide a `defaultFrontmatter` in their `TargetDefinition` do not need to supply a plugin or config override.
 
+This extensibility mechanism supports non-persona content types — e.g. skills can be built by registering custom targets with skill-appropriate frontmatter templates. See the [Building Skills](../../building-skills.md) guide.
+
 **Two-registry limitation:** `buildPersona()` and `buildSuite()` accept an optional `registry` parameter that defaults to `defaultRegistry`. If a consumer passes a custom `TargetRegistry` only to `build()` (via `config.targetRegistry`) and calls these functions directly without the registry argument, their custom targets will not be visible. Pass the same registry instance explicitly to avoid this, or call `build()` to have it forwarded automatically.
 
 ### 6. Ledger Plugin Removed in v2.0.0
@@ -152,7 +228,7 @@ longer exported by this package. Any code that imports from
 `@mistralys/persona-builder/plugins/ledger` will receive an `ERR_PACKAGE_PATH_NOT_EXPORTED`
 error at runtime.
 
-### 8. Changelog-Derived Versioning
+### 7. Changelog-Derived Versioning
 
 `version` and `last_updated` in the template context are **always derived by `buildContext()` from the `changelog` YAML field** — they must not be set manually in per-persona YAML.
 
@@ -170,9 +246,90 @@ error at runtime.
 3. Do **not** add a `last_updated:` key to per-persona YAML for version-date purposes — let it be derived from the `changelog` field. Explicit `last_updated:` in YAML is preserved but will not be overridden by the changelog date.
 4. The `default_version` key in `_shared.yaml` remains valid as a suite-wide fallback for personas with no `changelog` field.
 
+### 8. Partial Recursion Depth Cap Is Hardcoded at 2
+
 `resolvePartials()` uses a hardcoded recursion depth cap of `2`. This supports a "partial → nested partial → innermost partial" chain (two levels of nesting), but a third level is **not expanded** — the `{{> name}}` marker is left as-is in the output. This cap is **not configurable** via `BuildConfig` or any other option.
 
 **Decision (2026-04-14):** Making the cap configurable was evaluated and rejected. Depth 2 covers all practical persona template patterns. Adding a `maxPartialDepth` option would increase API surface and complexity with no demonstrated demand. If a third nesting level is required in the future, raise the `depth >= 2` guard in `src/engine/partials.ts` and update the tests in `tests/engine/partials.test.ts`.
+
+### 9. An Absent Effective Tool List Is Not Flagged
+
+`validateToolRequirements()` short-circuits to `[]` when `BuildResult.effectiveTools` is
+`undefined` (the target has no registered `TargetDefinition`, so there is no capability map to
+resolve against). This is deliberate: an absent tool list means the platform's own default grant
+applies, so there is nothing meaningful to compare — but it also means a custom target registered
+without `toolsContextKey`/`toolCapabilities` gets no dispatch-grant, parity, or foreign-notation
+checking at all, silently.
+
+### 10. Unmapped Tools Are Ignored By Every Check
+
+Only the seven capabilities in `TargetDefinition.toolCapabilities` (plus `mcp:<server>` via
+`mcpToolPattern`) are resolvable. A tool name outside that vocabulary — VS Code's `vscode` or
+`browser`, any custom or extension-contributed tool — never triggers a dispatch-grant error, a
+parity finding, or a foreign-notation warning, even if it is the *only* capability difference
+between two targets. This is the same rough-correspondence scope decision as invariant 4b above,
+restated here because it is a limitation from the validation user's perspective.
+
+### 11. Derived `cc_tools_*` Fields Are Computed Before `onBuildContext`
+
+`cc_tools_list`, `cc_tools_json`, and `cc_tools_block` (and their `tools_*`/`da_tools_*` siblings)
+are computed at context merge step 3, *before* plugin `onBuildContext` hooks run at step 5 (`ctx →
+onBuildContext`). A plugin that adds or changes `cc_tools` in `onBuildContext` does not see its
+change reflected in these derived fields — they were already serialized from the pre-plugin value.
+This is a pre-existing render-ordering quirk, not new to this plan; it affects template rendering
+of these specific derived fields, not the tool-validation checks (which resolve `effectiveTools`
+freshly, post-`onBuildContext`, via `resolveTargetTools()`).
+
+### 12. `buildPersona()` Ignores `targets`
+
+`buildPersona()` builds exactly the single persona × target combination it is given — calling it
+directly is an explicit request to build that combination, so it never consults the persona's
+resolved `targets` field. Only `buildSuite()`/`build()` apply per-persona target filtering. A
+direct `buildPersona()` call for an excluded target still renders and returns a `BuildResult`.
+
+### 13. `buildSuite()` and `buildPersona()` Do Not Run the Capability-Parity Check
+
+`validateToolParity()` only runs as a `build()` post-pass (see invariant 4b above), because it
+needs every target's `effectiveTools` for the same persona — information a single-suite or
+single-persona call cannot see. Calling `buildSuite()` or `buildPersona()` directly, without going
+through `build()`, never produces parity findings, regardless of `tool_parity_exceptions`.
+
+### 14. The Library Never Deletes Output For Excluded Targets
+
+When a persona's resolved `targets` excludes a target it previously built for (e.g. after editing
+`targets:` in YAML), the library skips rendering and writing for that target on the next build —
+it does **not** delete any file already written there from a prior build. Consumers that rely on
+`targets` to retire stale output for a persona must delete the file themselves (e.g. as part of an
+output-directory pre-clean step, the pattern this plan's AI Insights consumer already uses).
+
+### 15. No Escape Form for a Literal `{{!`
+
+Unlike `{{variableName}}`, which has a backslash escape (`\{{varName}}`) for emitting a literal
+marker, comment tags have no equivalent. A template that needs to show the literal three-character
+sequence `{{!` in rendered output cannot do so directly — `stripComments()` has no escape syntax to
+suppress comment recognition for a specific occurrence. Splitting the sequence across two adjacent
+`{{variableName}}`/text boundaries, or emitting it from a variable's resolved value instead of
+writing it as template source, are the only workarounds until an escape form is added.
+
+### 16. A Literal NUL Character in Template Source Is Dropped
+
+`resolveConditionals()` and `stripComments()` both signal "this block/comment resolved to
+nothing" internally with a single reserved character, `'\0'` (`EMPTY_BLOCK_MARKER`), then run
+one shared `mergeMarkers()` pass to collapse the surrounding blank-line runs. That marker and a
+literal NUL byte typed or pasted into template source are indistinguishable once the merge pass
+runs: the character is silently removed, along with any blank-line run directly around it,
+exactly as if it had been a vanished block or comment. This only surfaces once at least one real
+`{{#if}}`/`{{else}}`/`{{!--…--}}`/`{{!…}}` tag is present elsewhere in the same template — with no
+recognised tag at all, both functions return the input unchanged apart from line-ending
+normalisation (see §1's `toLf()` mirror note) before the merge pass ever runs, so the literal NUL
+survives untouched in that case.
+
+A NUL byte in a Markdown template is malformed content — no editor or YAML/Markdown toolchain
+in this project's pipeline writes one deliberately. This is documented as a known limitation
+rather than engineered around: a dynamic per-call sentinel code point would need its own regex
+construction and branching to protect a case no template author actually exercises. The
+behaviour is pinned by a characterization test
+(`ai-persona-builder/tests/engine/conditionals.test.ts`, "Known Limitation 16").
 
 ---
 

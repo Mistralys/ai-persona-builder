@@ -33,4 +33,14 @@
 
 ---
 
-**Manifest last revised:** 2026-04-02
+## Manifest Authoring Conventions
+
+These rules govern this manifest itself, not the library:
+
+- `api-surface.md` contains only public constructors, properties, and method signatures. Never include method bodies, internal logic, or private members. Reference a source file path when implementation context is needed.
+- Manifest documents describe current state. Counts and tallies ("236 tests across 15 files") go stale silently — state the durable fact and let readers query the current figure.
+- `constraints.md` is the only document written in the imperative. Every other section describes rather than instructs.
+
+---
+
+**Manifest last revised:** 2026-09-30
