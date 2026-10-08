@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.0.1 - Build Fix 
+
+**No functional changes, but a build fix:** The previous release was missing the compiled
+JavaScript files.
+
+- Package: Added an automatic build step on release.
+
 ## v3.0.0 - Persona Targets & Tool Validation (Breaking-S)
 
 **Validation errors now fail every build, not only strict ones.**
