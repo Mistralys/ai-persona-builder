@@ -166,6 +166,11 @@ Malformed or unterminated conditional tags — a stray `{{/if}}`, an unclosed `{
 flag name that isn't a plain `\w+` identifier — are left in the output exactly as written,
 with no substitution or removal attempted.
 
+**Line endings:** `{{#if}}` input is normalised to LF (`\n`) line endings before anything
+else happens, regardless of whether it was written with LF, CRLF, or a lone CR. The output
+of `resolveConditionals()` never contains `\r`, so a CRLF template (for example, one checked
+out on Windows with `core.autocrlf=true`) resolves identically to its LF twin.
+
 ## Comments
 
 ```
@@ -245,6 +250,10 @@ An `{{else}}` immediately followed by an inline comment on the same line —
 far as `resolveConditionals()` is concerned (it does not recognise comment delimiters), and
 `stripComments()` removes the comment's own characters without affecting the `{{else}}` tag's
 standalone status.
+
+**Line endings:** like `resolveConditionals()`, `stripComments()` normalises its input to LF
+line endings before anything else happens, so a CRLF or lone-CR comment resolves identically
+to its LF twin, and the output never contains `\r`.
 
 ## Built-in Context Variables
 

@@ -631,3 +631,72 @@ describe('stripComments()', () => {
     });
   });
 });
+
+describe('line endings', () => {
+  describe('stripComments()', () => {
+    it('normalises a CRLF standalone comment to the LF result', () => {
+      const text = 'A\r\n{{!-- c --}}\r\nB';
+      const result = stripComments(text);
+      expect(result).toBe('A\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('merges the blank-line run around a CRLF standalone comment', () => {
+      const text = 'A\r\n\r\n{{!-- c --}}\r\n\r\nB';
+      const result = stripComments(text);
+      expect(result).toBe('A\n\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('normalises a lone-CR standalone comment (no LF at all) to the LF result', () => {
+      const text = 'A\r{{!-- c --}}\rB';
+      const result = stripComments(text);
+      expect(result).toBe('A\nB');
+      expect(result).not.toContain('\r');
+    });
+  });
+
+  describe('resolveConditionals()', () => {
+    it('removes a falsy CRLF standalone block to the LF result', () => {
+      const text = 'A\r\n{{#if x}}\r\ny\r\n{{/if}}\r\nB';
+      const result = resolveConditionals(text, {});
+      expect(result).toBe('A\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('keeps a truthy CRLF standalone block, converted to the LF result', () => {
+      const text = 'A\r\n{{#if x}}\r\ny\r\n{{/if}}\r\nB';
+      const result = resolveConditionals(text, { x: true });
+      expect(result).toBe('A\ny\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('merges the blank-line run around a falsy CRLF standalone block', () => {
+      const text = 'A\r\n\r\n{{#if x}}\r\ny\r\n{{/if}}\r\n\r\nB';
+      const result = resolveConditionals(text, {});
+      expect(result).toBe('A\n\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('merges two adjacent emits-nothing CRLF blocks into one blank-line run', () => {
+      const text =
+        'A\r\n\r\n{{#if x}}\r\ny\r\n{{/if}}\r\n\r\n{{#if z}}\r\nq\r\n{{/if}}\r\n\r\nB';
+      const result = resolveConditionals(text, {});
+      expect(result).toBe('A\n\nB');
+      expect(result).not.toContain('\r');
+    });
+
+    it('keeps an inline CRLF block on the same line, converted to the LF result', () => {
+      const text = 'x {{#if a}}y{{/if}} w\r\nz';
+      const result = resolveConditionals(text, {});
+      expect(result).toBe('x  w\nz');
+      expect(result).not.toContain('\r');
+    });
+
+    it('converts CRLF input with no tags to the LF result', () => {
+      const text = 'A\r\nB';
+      expect(resolveConditionals(text, {})).toBe('A\nB');
+      expect(stripComments(text)).toBe('A\nB');
+    });
+  });
+});

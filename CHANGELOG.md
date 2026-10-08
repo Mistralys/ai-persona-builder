@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to @mistralys/persona-builder will be documented in this file.
 
@@ -46,6 +46,11 @@ All notable changes to @mistralys/persona-builder will be documented in this fil
   the runs between them to add up. Two or more emits-nothing `{{#if}}` blocks (or standalone
   comments) next to each other now leave exactly one paragraph break, the same guarantee a
   single vanished block already had. A kept block's content still breaks the merge.
+- **Fix:** `resolveConditionals()` and `stripComments()` now normalise CRLF and lone-CR line
+  endings to LF before resolving any tag, so a CRLF template — a partial, a frontmatter
+  template, or direct API input, including a template checked out on Windows with
+  `core.autocrlf=true` — renders identically to its LF twin instead of treating every
+  standalone tag as inline. Both functions' output is now unconditionally LF-only.
 - Engine: Added template comments (`{{!-- … --}}`, `{{! … }}`) via `stripComments()`, applied
   before partials, frontmatter and tool-requirement scans — a commented-out `{{> partial}}` or
   `{{variable}}` neither expands nor warns, and shares the conditional tags' standalone/inline

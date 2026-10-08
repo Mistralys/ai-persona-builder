@@ -24,6 +24,8 @@ All five engine modules (`partials.ts`, `conditionals.ts`, `variables.ts`, `post
 
 > Any new function added to `src/engine/` **must** maintain this zero-dependency invariant. If a function requires `node:fs`, `node:path`, or any npm package, it belongs in `src/loaders/` or `src/builders/`, not `src/engine/`.
 
+`conditionals.ts`'s `resolveConditionals()` and `stripComments()` normalise CRLF/lone-CR input to LF as their first statement, via a module-private `toLf()` that mirrors `postProcessor.ts`'s `normalizeNewlines()`. The rule is duplicated, not imported, because the zero-import invariant above forbids `conditionals.ts` from importing anything, even from a sibling engine module — `toLf()`'s JSDoc names `normalizeNewlines()` as its twin so a change to one prompts review of the other.
+
 ### 2. Synchronous Plugin Runner — plan for async before adding remote plugins
 
 The plugin runner (`src/plugins/runner.ts`) is fully synchronous. All six hook functions (`runSuiteInit`, `runPartials`, `runBuildContext`, `runPersonaPartials`, `runPostRender`, `runValidate`) are synchronous. This is correct for the current use case (local file-based builds).
@@ -318,8 +320,9 @@ literal NUL byte typed or pasted into template source are indistinguishable once
 runs: the character is silently removed, along with any blank-line run directly around it,
 exactly as if it had been a vanished block or comment. This only surfaces once at least one real
 `{{#if}}`/`{{else}}`/`{{!--…--}}`/`{{!…}}` tag is present elsewhere in the same template — with no
-recognised tag at all, both functions return the input unchanged before the merge pass ever runs,
-so the literal NUL survives untouched in that case.
+recognised tag at all, both functions return the input unchanged apart from line-ending
+normalisation (see §1's `toLf()` mirror note) before the merge pass ever runs, so the literal NUL
+survives untouched in that case.
 
 A NUL byte in a Markdown template is malformed content — no editor or YAML/Markdown toolchain
 in this project's pipeline writes one deliberately. This is documented as a known limitation

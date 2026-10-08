@@ -28,6 +28,10 @@
  *   conditional tags and all other text untouched. It is the only place
  *   comments are removed; `resolveConditionals()` does not recognise
  *   comment delimiters.
+ *
+ * Line endings: both entry points normalise CRLF and lone CR to LF as
+ * their first statement, before any other processing, so their output
+ * never contains `\r` regardless of the input's line endings.
  */
 
 /**
@@ -55,6 +59,20 @@
  */
 const TAG_PATTERN =
   /\{\{#if (\w+)\}\}|\{\{else if (\w+)\}\}|\{\{else\}\}|\{\{\/if\}\}|\{\{!--[\s\S]*?--\}\}|\{\{!(?!--)[\s\S]*?\}\}/g;
+
+/**
+ * Normalise CRLF and lone CR line endings to LF. Mirrors
+ * `postProcessor.ts`'s `normalizeNewlines()` — the zero-import invariant
+ * (`constraints.md` §1) forbids importing it here, so the one-line rule
+ * is duplicated instead. Called as the first statement of both
+ * `resolveConditionals()` and `stripComments()`, before the no-tag fast
+ * path, so both functions always return LF-only output regardless of
+ * input line endings.
+ * @internal
+ */
+function toLf(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
+}
 
 /**
  * A single recognised conditional or comment tag occurrence.
@@ -379,6 +397,10 @@ function mergeMarkers(text: string): string {
  * Unknown flags (absent from context) are treated as falsy. Truthiness is
  * ordinary JS truthiness of `context[flag]`.
  *
+ * - **Line endings:** CRLF and lone CR in `text` are normalised to LF
+ *   before anything else happens, so the returned string never contains
+ *   `\r`, regardless of the input's line endings.
+ *
  * @param text    - Template string potentially containing {{#if}} blocks
  * @param context - Key-value map used to evaluate flag truthiness
  * @returns       The template string with conditional blocks resolved
@@ -387,6 +409,7 @@ export function resolveConditionals(
   text: string,
   context: Record<string, unknown>,
 ): string {
+  text = toLf(text);
   const tags = tokenize(text);
   if (tags.length === 0) {
     return text;
@@ -437,10 +460,15 @@ export function resolveConditionals(
  * `{{!` (no closing delimiter before end of input) passes through as
  * literal text, exactly like a malformed conditional tag.
  *
+ * - **Line endings:** CRLF and lone CR in `text` are normalised to LF
+ *   before anything else happens, so the returned string never contains
+ *   `\r`, regardless of the input's line endings.
+ *
  * @param text - Template string potentially containing comment tags
  * @returns    The template string with comment tags removed
  */
 export function stripComments(text: string): string {
+  text = toLf(text);
   const tags = tokenize(text).filter((tag) => tag.kind === 'comment');
   if (tags.length === 0) {
     return text;

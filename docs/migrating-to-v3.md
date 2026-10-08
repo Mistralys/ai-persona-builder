@@ -163,6 +163,37 @@ resolveConditionals(tpl, { flagA: false, flagB: false });
 // => 'Paragraph A.\n\nParagraph B.'
 ```
 
+### Line endings
+
+**What changed:** `resolveConditionals()` and `stripComments()` now normalise CRLF (`\r\n`) and
+lone-CR (`\r`) line endings to LF (`\n`) as their first step, before any tag is tokenized. Their
+output is now unconditionally LF-only. Previously, a CRLF template's standalone tags were
+misclassified as inline — the trailing `\r` after a tag failed the standalone/inline whitespace
+check — so a line that should have been removed in full was instead left behind as an empty line.
+
+**Who is affected:** Any persona content template, shared or suite partial, or frontmatter
+template whose source file uses CRLF line endings — most commonly one checked out on Windows
+with `core.autocrlf=true` — and that contains a standalone `{{#if}}`/`{{else}}`/`{{/if}}` or
+`{{!-- … --}}`/`{{! … }}` tag. Direct API callers passing CRLF strings to either function are
+affected the same way, including `ai-insights`' own wrapper checks (`agent-slug-validation.js`,
+`philosophy-tone.js`).
+
+**What to do:** No config change is needed; this is a pure rendering fix. Re-render any persona
+built from a CRLF source file and diff the output — a standalone tag line that previously left a
+stray blank line now resolves exactly like its LF twin.
+
+Verified example — executed against the built `dist/`:
+
+```js
+const { resolveConditionals } = require('@mistralys/persona-builder');
+
+const tpl = 'A\r\n{{#if x}}\r\ny\r\n{{/if}}\r\nB';
+resolveConditionals(tpl, {});
+// => 'A\nB'
+resolveConditionals(tpl, { x: true });
+// => 'A\ny\nB'
+```
+
 ## 5. `{{!…}}` comment syntax
 
 **What changed:** Template comments (`{{!-- … --}}` and `{{! … }}`) are new in v3.0.0, applied by

@@ -290,6 +290,8 @@ Nested `{{#if}}` blocks inside `{{else}}` branches are supported — resolved in
 
 `resolveConditionals()` resolves conditional tags only — it does not recognise comment delimiters (`{{!-- … --}}` / `{{! … }}`), so any comment in the input passes through it as literal text. A direct caller that wants both resolved must call `stripComments()` first.
 
+**Line endings:** `text` is normalised to LF line endings as the first step, before tokenizing, regardless of whether the input used LF, CRLF, or a lone CR. The return value is always LF-only.
+
 ### `stripComments(text)`
 
 ```ts
@@ -299,6 +301,8 @@ export function stripComments(text: string): string;
 Removes template comments — `{{!-- … --}}` (may span lines, may contain a literal `}}`) and `{{! … }}` (may span lines, cannot contain a literal `}}`) — using the same tokenizer as `resolveConditionals()` and the identical standalone/inline/blank-run-merge whitespace contract described above, including the adjacent-removal merge: two or more standalone comments separated only by whitespace-only lines merge their surrounding blank-line runs into one. Any tag or template syntax written inside a comment (a partial, conditional, or variable reference) is removed along with it and never separately recognised — this is what makes a commented-out reference fully inert. An unterminated `{{!--` or `{{!` passes through as literal text, exactly like a malformed conditional tag.
 
 This is the only place comments are removed: `resolveConditionals()` does not recognise comment delimiters. The builder calls `stripComments()` at every point a template reaches it — the loaded body template, the final per-persona partials map, and the frontmatter template — before partials, conditionals, or variables are resolved (see **Processing order** in `constraints.md`).
+
+**Line endings:** like `resolveConditionals()`, `text` is normalised to LF line endings as the first step, before tokenizing. The return value is always LF-only.
 
 ### `resolveVariables(text, context, filename)`
 

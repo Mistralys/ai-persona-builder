@@ -300,3 +300,136 @@ describe('conditional {{else}} followed by an inline comment', () => {
     expect(content).toContain('Visible.');
   });
 });
+
+// ---------------------------------------------------------------------------
+// CRLF ingestion at each of the three strip points
+// ---------------------------------------------------------------------------
+
+describe('CRLF templates', () => {
+  it('a CRLF body builds output byte-identical to the same fixture written with LF', async () => {
+    const crlfBody =
+      '# {{name}}\r\n\r\n{{!-- a note --}}\r\n{{#if never_set}}\r\nHidden.\r\n{{else}}\r\nVisible.\r\n{{/if}}\r\n';
+    const lfBody = crlfBody.replace(/\r\n/g, '\n');
+
+    const { suiteConfig: crlfSuite } = await createMinimalSuite(testTmpDir, {
+      suiteDirName: 'suite-crlf',
+      outputDirName: 'out-crlf',
+      contentMd: crlfBody,
+    });
+    const { suiteConfig: lfSuite } = await createMinimalSuite(testTmpDir, {
+      suiteDirName: 'suite-lf',
+      outputDirName: 'out-lf',
+      contentMd: lfBody,
+    });
+
+    const crlfSummary = await build({
+      suites: { test: { srcDir: crlfSuite.srcDir, outVscode: crlfSuite.outVscode, outClaudeCode: crlfSuite.outClaudeCode } },
+      targets: ['vscode'],
+      check: true,
+    });
+    const lfSummary = await build({
+      suites: { test: { srcDir: lfSuite.srcDir, outVscode: lfSuite.outVscode, outClaudeCode: lfSuite.outClaudeCode } },
+      targets: ['vscode'],
+      check: true,
+    });
+
+    const crlfContent = findResult(crlfSummary, 'vscode')!.content;
+    const lfContent = findResult(lfSummary, 'vscode')!.content;
+
+    expect(crlfContent).toBe(lfContent);
+    expect(crlfContent).not.toContain('\r');
+  });
+
+  it('a CRLF shared partial with a standalone comment and a standalone conditional builds byte-identical to its LF twin', async () => {
+    const crlfPartial =
+      'Hello.\r\n\r\n{{!-- internal note, never shipped --}}\r\n{{#if never_set}}\r\nHidden.\r\n{{/if}}\r\nWelcome.';
+    const lfPartial = crlfPartial.replace(/\r\n/g, '\n');
+
+    const { suiteConfig: crlfSuite, sharedPartialsDir: crlfShared } = await createMinimalSuite(
+      testTmpDir,
+      {
+        suiteDirName: 'suite-crlf-partial',
+        outputDirName: 'out-crlf-partial',
+        contentMd: '# {{name}}\n\n{{> greeting}}\n',
+        sharedPartials: { greeting: crlfPartial },
+      },
+    );
+    const { suiteConfig: lfSuite, sharedPartialsDir: lfShared } = await createMinimalSuite(
+      testTmpDir,
+      {
+        suiteDirName: 'suite-lf-partial',
+        outputDirName: 'out-lf-partial',
+        contentMd: '# {{name}}\n\n{{> greeting}}\n',
+        sharedPartials: { greeting: lfPartial },
+      },
+    );
+
+    const crlfSummary = await build({
+      suites: { test: { srcDir: crlfSuite.srcDir, outVscode: crlfSuite.outVscode, outClaudeCode: crlfSuite.outClaudeCode } },
+      sharedPartialsDir: crlfShared,
+      targets: ['vscode'],
+      check: true,
+    });
+    const lfSummary = await build({
+      suites: { test: { srcDir: lfSuite.srcDir, outVscode: lfSuite.outVscode, outClaudeCode: lfSuite.outClaudeCode } },
+      sharedPartialsDir: lfShared,
+      targets: ['vscode'],
+      check: true,
+    });
+
+    const crlfContent = findResult(crlfSummary, 'vscode')!.content;
+    const lfContent = findResult(lfSummary, 'vscode')!.content;
+
+    expect(crlfContent).toBe(lfContent);
+    expect(crlfContent).not.toContain('\r');
+    expect(crlfContent).not.toContain('internal note');
+    expect(crlfContent).not.toContain('Hidden.');
+    expect(crlfContent).toContain('Welcome.');
+  });
+
+  it('a CRLF plugin frontmatter template builds byte-identical to its LF twin', async () => {
+    const crlfFrontmatter =
+      "---\r\nname: '{{name}}'\r\n{{!-- do not ship this note --}}\r\ndescription: '{{description}}'\r\n---";
+    const lfFrontmatter = crlfFrontmatter.replace(/\r\n/g, '\n');
+
+    const { suiteConfig: crlfSuite } = await createMinimalSuite(testTmpDir, {
+      suiteDirName: 'suite-crlf-frontmatter',
+      outputDirName: 'out-crlf-frontmatter',
+      contentMd: '# {{name}}\n',
+    });
+    const { suiteConfig: lfSuite } = await createMinimalSuite(testTmpDir, {
+      suiteDirName: 'suite-lf-frontmatter',
+      outputDirName: 'out-lf-frontmatter',
+      contentMd: '# {{name}}\n',
+    });
+
+    const crlfPlugin: PersonaBuildPlugin = {
+      name: 'custom-frontmatter-crlf',
+      frontmatterTemplates: { vscode: crlfFrontmatter },
+    };
+    const lfPlugin: PersonaBuildPlugin = {
+      name: 'custom-frontmatter-lf',
+      frontmatterTemplates: { vscode: lfFrontmatter },
+    };
+
+    const crlfSummary = await build({
+      suites: { test: { srcDir: crlfSuite.srcDir, outVscode: crlfSuite.outVscode, outClaudeCode: crlfSuite.outClaudeCode } },
+      plugins: [crlfPlugin],
+      targets: ['vscode'],
+      check: true,
+    });
+    const lfSummary = await build({
+      suites: { test: { srcDir: lfSuite.srcDir, outVscode: lfSuite.outVscode, outClaudeCode: lfSuite.outClaudeCode } },
+      plugins: [lfPlugin],
+      targets: ['vscode'],
+      check: true,
+    });
+
+    const crlfContent = findResult(crlfSummary, 'vscode')!.content;
+    const lfContent = findResult(lfSummary, 'vscode')!.content;
+
+    expect(crlfContent).toBe(lfContent);
+    expect(crlfContent).not.toContain('\r');
+    expect(crlfContent).not.toContain('do not ship this note');
+  });
+});
