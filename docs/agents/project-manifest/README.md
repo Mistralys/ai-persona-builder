@@ -30,6 +30,7 @@
 | **Public API Surface** | [api-surface.md](api-surface.md) | All exported types, functions, and constants — signatures only. |
 | **Key Data Flows** | [data-flows.md](data-flows.md) | Main interaction paths through the build pipeline. |
 | **Constraints & Conventions** | [constraints.md](constraints.md) | Architectural invariants, naming rules, and known limitations. |
+| **Curation Log** | [curation-log.md](curation-log.md) | Standing decisions settled with the user (why the manifest is arranged as it is) and the dated history of curation passes. |
 
 ---
 
@@ -40,7 +41,3 @@ These rules govern this manifest itself, not the library:
 - `api-surface.md` contains only public constructors, properties, and method signatures. Never include method bodies, internal logic, or private members. Reference a source file path when implementation context is needed.
 - Manifest documents describe current state. Counts and tallies ("236 tests across 15 files") go stale silently — state the durable fact and let readers query the current figure.
 - `constraints.md` is the only document written in the imperative. Every other section describes rather than instructs.
-
----
-
-**Manifest last revised:** 2026-09-30
